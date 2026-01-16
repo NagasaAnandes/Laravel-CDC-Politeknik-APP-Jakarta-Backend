@@ -26,4 +26,9 @@ class JobVacancy extends Model
         'published_at' => 'datetime',
         'expired_at' => 'date',
     ];
+
+    public function applicationLogs()
+    {
+        return $this->hasMany(JobApplicationLog::class);
+    }
 }
