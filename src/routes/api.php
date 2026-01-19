@@ -4,12 +4,17 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\JobController;
+use App\Http\Controllers\Api\V1\EventController;
 
 Route::prefix('v1')->group(function () {
 
+    // ===== JOBS (Guest View) =====
     Route::get('jobs', [JobController::class, 'index']);
     Route::get('jobs/{job}', [JobController::class, 'show']);
-    Route::post('jobs/{job}/apply', [JobController::class, 'apply']);
+
+    // ===== EVENTS (Guest View) =====
+    Route::get('events', [EventController::class, 'index']);
+    Route::get('events/{event}', [EventController::class, 'show']);
 
     // ===== AUTH =====
     Route::post('auth/login', [AuthController::class, 'login']);
@@ -25,5 +30,9 @@ Route::prefix('v1')->group(function () {
 
         // ===== JOBS =====
         Route::post('jobs/{job}/apply', [JobController::class, 'apply']);
+
+        // ===== EVENTS =====
+        Route::post('events/{event}/register', [EventController::class, 'register']);
+        Route::get('my/events', [EventController::class, 'myEvents']);
     });
 });
