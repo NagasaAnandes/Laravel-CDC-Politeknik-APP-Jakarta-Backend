@@ -16,30 +16,54 @@ class AnnouncementController extends Controller
      */
     public function index(Request $request)
     {
-        $announcements = Announcement::query()
+        $query = Announcement::query()
             ->where('is_active', true)
             ->whereNotNull('published_at')
             ->where(function ($q) {
                 $q->whereNull('expired_at')
                     ->orWhere('expired_at', '>=', now());
-            })
+            });
+
+        // 🔍 SEARCH
+        if ($request->filled('search')) {
+            $search = $request->string('search');
+
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('content', 'like', "%{$search}%");
+            });
+        }
+
+        // 🎯 FILTERS
+        if ($request->filled('category')) {
+            $query->where('category', $request->string('category'));
+        }
+
+        if ($request->filled('priority')) {
+            $query->where('priority', $request->string('priority'));
+        }
+
+        if ($request->filled('target')) {
+            $query->where('target_audience', $request->string('target'));
+        }
+
+        $announcements = $query
             ->orderByDesc('published_at')
             ->get()
-            ->map(function (Announcement $announcement) {
-                return [
-                    'id' => $announcement->id,
-                    'title' => $announcement->title,
-                    'category' => $announcement->category,
-                    'priority' => $announcement->priority,
-                    'target_audience' => $announcement->target_audience,
-                    'published_at' => $announcement->published_at,
-                ];
-            });
+            ->map(fn(Announcement $a) => [
+                'id' => $a->id,
+                'title' => $a->title,
+                'category' => $a->category,
+                'priority' => $a->priority,
+                'target_audience' => $a->target_audience,
+                'published_at' => $a->published_at,
+            ]);
 
         return response()->json([
             'data' => $announcements,
         ]);
     }
+
 
     /**
      * GET /api/v1/announcements/{id}

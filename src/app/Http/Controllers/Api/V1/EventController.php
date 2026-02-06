@@ -18,11 +18,36 @@ class EventController extends Controller
      */
     public function index(Request $request)
     {
-        $events = Event::query()
+        $query = Event::query()
             ->where('is_active', true)
             ->whereNotNull('published_at')
             ->where('end_datetime', '>=', now())
-            ->withCount('registrations')
+            ->withCount('registrations');
+
+        // 🔍 SEARCH
+        if ($request->filled('search')) {
+            $search = $request->string('search');
+
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhere('organizer', 'like', "%{$search}%");
+            });
+        }
+
+        // 🎯 FILTER: event_type
+        if ($request->filled('event_type')) {
+            $query->where('event_type', $request->string('event_type'));
+        }
+
+        // 🎯 FILTER: upcoming
+        if ($request->filled('upcoming')) {
+            if ($request->boolean('upcoming') === true) {
+                $query->where('start_datetime', '>=', now());
+            }
+        }
+
+        $events = $query
             ->orderBy('start_datetime')
             ->get()
             ->map(function (Event $event) {
@@ -45,6 +70,7 @@ class EventController extends Controller
             'data' => $events,
         ]);
     }
+
 
     /**
      * GET /api/v1/events/{id}
