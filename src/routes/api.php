@@ -5,8 +5,13 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\JobController;
 use App\Http\Controllers\Api\V1\EventController;
+use App\Http\Controllers\Api\V1\AnnouncementController;
 
 Route::prefix('v1')->group(function () {
+
+    // ===== ANNOUNCEMENTS (Guest View) =====
+    Route::get('announcements', [AnnouncementController::class, 'index']);
+    Route::get('announcements/{announcement}', [AnnouncementController::class, 'show']);
 
     // ===== JOBS (Guest View) =====
     Route::get('jobs', [JobController::class, 'index']);
