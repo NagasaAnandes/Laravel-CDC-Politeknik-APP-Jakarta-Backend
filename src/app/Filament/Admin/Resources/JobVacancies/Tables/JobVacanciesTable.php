@@ -33,18 +33,27 @@ class JobVacanciesTable
                         'intern' => 'Intern',
                         'remote' => 'Remote',
                         default => ucfirst($state),
-                    })
-                    ->sortable(),
+                    }),
 
-                IconColumn::make('is_active')
-                    ->boolean(),
+                IconColumn::make('status')
+                    ->label('Published')
+                    ->state(fn($record) => $record->isPublished())
+                    ->boolean()
+                    ->trueColor('success')
+                    ->falseColor('gray'),
 
-                DateColumn::make('expired_at')->date(),
+                TextColumn::make('published_at')
+                    ->label('Published At')
+                    ->dateTime()
+                    ->placeholder('Immediate'),
 
-                DateColumn::make('published_at')->since(),
+                TextColumn::make('expired_at')
+                    ->label('Expires At')
+                    ->date()
+                    ->placeholder('—'),
             ])
             ->filters([
-                TernaryFilter::make('is_active'),
+                // optional, jika mau
             ])
             ->recordActions([
                 EditAction::make(),

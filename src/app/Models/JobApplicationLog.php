@@ -19,4 +19,19 @@ class JobApplicationLog extends Model
     protected $casts = [
         'clicked_at' => 'datetime',
     ];
+
+    public function jobVacancy()
+    {
+        return $this->belongsTo(JobVacancy::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function isGuest(): bool
+    {
+        return $this->user_id === null;
+    }
 }

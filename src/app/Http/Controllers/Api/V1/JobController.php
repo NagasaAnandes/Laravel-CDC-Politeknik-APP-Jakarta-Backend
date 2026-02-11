@@ -10,16 +10,8 @@ class JobController extends Controller
 {
     public function index(Request $request)
     {
-        $query = JobVacancy::query()
-            ->where('is_active', true)
-            ->whereNotNull('published_at')
-            ->where('published_at', '<=', now())
-            ->where(function ($query) {
-                $query->whereNull('expired_at')
-                    ->orWhere('expired_at', '>=', today());
-            });
+        $query = JobVacancy::published();
 
-        // 🔍 SEARCH
         if ($request->filled('search')) {
             $search = $request->string('search');
 
@@ -30,7 +22,6 @@ class JobController extends Controller
             });
         }
 
-        // 🎯 FILTERS
         if ($request->filled('employment_type')) {
             $query->where('employment_type', $request->string('employment_type'));
         }
@@ -41,14 +32,17 @@ class JobController extends Controller
 
         $jobs = $query
             ->orderByDesc('published_at')
-            ->get([
-                'id',
-                'title',
-                'company_name',
-                'location',
-                'employment_type',
-                'published_at',
+            ->get()
+            ->map(fn($job) => [
+                'id' => $job->id,
+                'title' => $job->title,
+                'company_name' => $job->company_name,
+                'location' => $job->location,
+                'employment_type' => $job->employment_type,
+                'published_at' => $job->published_at,
+                'poster_url' => $job->poster_url,
             ]);
+
 
         return response()->json([
             'data' => $jobs,
@@ -57,12 +51,7 @@ class JobController extends Controller
 
     public function show(JobVacancy $job)
     {
-        if (
-            ! $job->is_active ||
-            ! $job->published_at ||
-            $job->published_at->isFuture() ||
-            ($job->expired_at && $job->expired_at->isPast())
-        ) {
+        if (! $job->isPublished()) {
             return response()->json([
                 'message' => 'Job not found',
             ], 404);
@@ -79,19 +68,14 @@ class JobController extends Controller
                 'external_apply_url' => $job->external_apply_url,
                 'published_at' => $job->published_at,
                 'expired_at' => $job->expired_at,
+                'poster_url' => $job->poster_url,
             ],
         ]);
     }
 
-
     public function apply(Request $request, JobVacancy $job)
     {
-        if (
-            ! $job->is_active ||
-            ! $job->published_at ||
-            $job->published_at->isFuture() ||
-            ($job->expired_at && $job->expired_at->isPast())
-        ) {
+        if (! $job->isPublished()) {
             return response()->json([
                 'message' => 'Job not available',
             ], 404);

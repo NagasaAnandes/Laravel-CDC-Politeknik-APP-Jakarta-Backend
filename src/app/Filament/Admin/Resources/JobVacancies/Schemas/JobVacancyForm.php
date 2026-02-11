@@ -4,6 +4,9 @@ namespace App\Filament\Admin\Resources\JobVacancies\Schemas;
 
 use Filament\Forms;
 use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Forms\Components\FileUpload;
+
 
 class JobVacancyForm
 {
@@ -40,14 +43,36 @@ class JobVacancyForm
                 ->required()
                 ->maxLength(2048)
                 ->placeholder('https://www.company.com/careers')
-                ->helperText('Harus diawali dengan http:// atau https://'),
+                ->helperText('Arahkan ke halaman resmi perusahaan'),
 
-            Forms\Components\Toggle::make('is_active')
-                ->default(true),
+            FileUpload::make('poster_path')
+                ->label('Job Poster')
+                ->image()
+                ->disk('public')
+                ->directory('job-posters')
+                ->visibility('public')
+                ->imagePreviewHeight('200')
+                ->maxSize(2048)
+                ->nullable()
+                ->helperText('Poster lowongan (opsional). JPG / PNG / WEBP'),
 
-            Forms\Components\DateTimePicker::make('published_at'),
 
-            Forms\Components\DatePicker::make('expired_at'),
+            Section::make('Publication Settings')
+                ->description('Pengaturan visibilitas lowongan ke mahasiswa')
+                ->schema([
+                    Forms\Components\Toggle::make('is_active')
+                        ->label('Active')
+                        ->helperText('Jika nonaktif, lowongan tidak akan tampil di publik')
+                        ->default(true),
+
+                    Forms\Components\DateTimePicker::make('published_at')
+                        ->label('Publish At')
+                        ->helperText('Kosongkan untuk publish langsung'),
+
+                    Forms\Components\DatePicker::make('expired_at')
+                        ->label('Expire At')
+                        ->helperText('Lowongan tidak akan tampil setelah tanggal ini'),
+                ]),
         ]);
     }
 }
