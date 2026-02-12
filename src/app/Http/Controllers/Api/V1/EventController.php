@@ -18,10 +18,7 @@ class EventController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Event::query()
-            ->where('is_active', true)
-            ->whereNotNull('published_at')
-            ->where('end_datetime', '>=', now())
+        $query = Event::published()
             ->withCount('registrations');
 
         // 🔍 SEARCH
@@ -40,11 +37,9 @@ class EventController extends Controller
             $query->where('event_type', $request->string('event_type'));
         }
 
-        // 🎯 FILTER: upcoming
-        if ($request->filled('upcoming')) {
-            if ($request->boolean('upcoming') === true) {
-                $query->where('start_datetime', '>=', now());
-            }
+        // 🎯 FILTER: upcoming only
+        if ($request->boolean('upcoming')) {
+            $query->where('start_datetime', '>=', now());
         }
 
         $events = $query
@@ -55,6 +50,7 @@ class EventController extends Controller
                     'id' => $event->id,
                     'title' => $event->title,
                     'event_type' => $event->event_type,
+                    'poster_url' => $event->poster_url, // ✅ added
                     'start_datetime' => $event->start_datetime,
                     'end_datetime' => $event->end_datetime,
                     'location' => $event->location,
@@ -71,18 +67,13 @@ class EventController extends Controller
         ]);
     }
 
-
     /**
      * GET /api/v1/events/{id}
      * Public event detail
      */
     public function show(Request $request, Event $event)
     {
-        if (
-            ! $event->is_active ||
-            $event->published_at === null ||
-            $event->end_datetime < now()
-        ) {
+        if (! $event->isPublished()) {
             abort(404);
         }
 
@@ -102,6 +93,7 @@ class EventController extends Controller
                 'title' => $event->title,
                 'description' => $event->description,
                 'event_type' => $event->event_type,
+                'poster_url' => $event->poster_url, // ✅ added
                 'organizer' => $event->organizer,
                 'location' => $event->location,
                 'start_datetime' => $event->start_datetime,
@@ -125,16 +117,10 @@ class EventController extends Controller
      */
     public function register(EventRegisterRequest $request, Event $event)
     {
-        // Guard: event must be public & active
-        if (
-            ! $event->is_active ||
-            $event->published_at === null ||
-            $event->end_datetime < now()
-        ) {
+        if (! $event->isPublished()) {
             abort(404);
         }
 
-        // Redirect-only event
         if ($event->registration_method === 'redirect') {
             EventLog::create([
                 'event_id'   => $event->id,
@@ -149,46 +135,37 @@ class EventController extends Controller
             ]);
         }
 
-        // Prevent duplicate registration
-        $alreadyRegistered = EventRegistration::where('event_id', $event->id)
-            ->where('user_id', $request->user()->id)
-            ->exists();
+        $registeredAt = now();
 
-        if ($alreadyRegistered) {
+        try {
+            DB::transaction(function () use ($request, $event, $registeredAt) {
+
+                $event = Event::where('id', $event->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($event->isQuotaFull()) {
+                    abort(422, 'Event quota is full');
+                }
+
+                EventRegistration::create([
+                    'event_id'      => $event->id,
+                    'user_id'       => $request->user()->id,
+                    'registered_at' => $registeredAt,
+                ]);
+
+                EventLog::create([
+                    'event_id'   => $event->id,
+                    'user_id'    => $request->user()->id,
+                    'action'     => 'register',
+                    'created_at' => $registeredAt,
+                ]);
+            });
+        } catch (\Illuminate\Database\QueryException $e) {
             return response()->json([
                 'message' => 'You are already registered for this event',
             ], 409);
         }
-
-        // Quota check
-        if ($event->quota !== null) {
-            $registeredCount = EventRegistration::where('event_id', $event->id)->count();
-
-            if ($registeredCount >= $event->quota) {
-                return response()->json([
-                    'message' => 'Event quota is full',
-                ], 422);
-            }
-        }
-
-        // Single source of truth for time
-        $registeredAt = now();
-
-        DB::transaction(function () use ($request, $event, $registeredAt) {
-            EventRegistration::create([
-                'event_id'            => $event->id,
-                'user_id'             => $request->user()->id,
-                'registration_status' => 'registered',
-                'registered_at'       => $registeredAt,
-            ]);
-
-            EventLog::create([
-                'event_id'   => $event->id,
-                'user_id'    => $request->user()->id,
-                'action'     => 'register',
-                'created_at' => $registeredAt,
-            ]);
-        });
 
         return response()->json([
             'message' => 'Successfully registered for event',
@@ -196,11 +173,13 @@ class EventController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/v1/events/my
+     */
     public function myEvents(Request $request)
     {
         $user = $request->user();
 
-        // Guard role (defensive, walau sudah di request)
         if (! in_array($user->role->value, ['student', 'alumni'])) {
             abort(403);
         }
@@ -216,14 +195,15 @@ class EventController extends Controller
                 return [
                     'event_id' => $event->id,
                     'title' => $event->title,
+                    'poster_url' => $event->poster_url,
                     'event_type' => $event->event_type,
                     'start_datetime' => $event->start_datetime,
                     'end_datetime' => $event->end_datetime,
                     'location' => $event->location,
-                    'registration_status' => $registration->registration_status,
                     'registered_at' => $registration->registered_at,
                 ];
             });
+
 
         return response()->json([
             'data' => $registrations,

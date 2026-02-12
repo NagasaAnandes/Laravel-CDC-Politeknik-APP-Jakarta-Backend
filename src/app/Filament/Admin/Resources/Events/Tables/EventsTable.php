@@ -5,22 +5,59 @@ namespace App\Filament\Admin\Resources\Events\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\DeleteAction;
+use Illuminate\Database\Eloquent\Builder;
 
 class EventsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(
+                fn(Builder $query) =>
+                $query->withCount('registrations')
+            )
             ->columns([
+
                 TextColumn::make('title')
                     ->label('Title')
                     ->searchable()
                     ->sortable(),
+
+                TextColumn::make('status')
+                    ->label('Status')
+                    ->badge()
+                    ->getStateUsing(function ($record) {
+                        if (! $record->is_active) {
+                            return 'Inactive';
+                        }
+
+                        if ($record->published_at === null) {
+                            return 'Draft';
+                        }
+
+                        if ($record->published_at->isFuture()) {
+                            return 'Scheduled';
+                        }
+
+                        if ($record->end_datetime->isPast()) {
+                            return 'Ended';
+                        }
+
+                        return 'Ongoing';
+                    })
+                    ->colors([
+                        'secondary' => 'Draft',
+                        'warning'   => 'Scheduled',
+                        'success'   => 'Ongoing',
+                        'danger'    => 'Ended',
+                        'gray'      => 'Inactive',
+                    ]),
 
                 TextColumn::make('event_type')
                     ->label('Type')
@@ -47,12 +84,22 @@ class EventsTable
 
                 TextColumn::make('quota')
                     ->label('Quota')
-                    ->formatStateUsing(fn($state) => $state ?? 'Unlimited')
-                    ->sortable(),
+                    ->formatStateUsing(function ($state, $record) {
+                        if ($record->registration_method !== 'internal') {
+                            return '-';
+                        }
+
+                        if ($state === null) {
+                            return $record->registrations_count . ' / ∞';
+                        }
+
+                        return $record->registrations_count . ' / ' . $state;
+                    }),
 
                 IconColumn::make('is_active')
                     ->label('Active')
-                    ->boolean(),
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('published_at')
                     ->label('Published')
@@ -86,14 +133,14 @@ class EventsTable
                 EditAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn($record) => $record->registrations()->count() === 0),
+                    ->visible(fn($record) => $record->registrations_count === 0),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->visible(
                             fn($records) =>
-                            $records->every(fn($record) => $record->registrations()->count() === 0)
+                            $records->every(fn($record) => $record->registrations_count === 0)
                         ),
                 ]),
             ])

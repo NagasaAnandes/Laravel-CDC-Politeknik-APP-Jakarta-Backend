@@ -19,11 +19,7 @@ class EditEvent extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        if (
-            $data['is_active'] &&
-            empty($this->record->published_at) &&
-            empty($data['published_at'])
-        ) {
+        if ($data['is_active'] && empty($data['published_at'])) {
             $data['published_at'] = now();
         }
 
