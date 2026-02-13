@@ -19,6 +19,8 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Filament\Admin\Widgets\JobClickStats;
+use App\Filament\Admin\Widgets\AnnouncementStats;
+use App\Filament\Admin\Widgets\EventStats;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -40,6 +42,8 @@ class AdminPanelProvider extends PanelProvider
             ->widgets([
                 AccountWidget::class,
                 JobClickStats::class,
+                AnnouncementStats::class,
+                EventStats::class,
             ])
             ->middleware([
                 EncryptCookies::class,
