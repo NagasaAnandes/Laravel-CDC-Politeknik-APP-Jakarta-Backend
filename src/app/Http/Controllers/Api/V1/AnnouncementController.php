@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Announcement;
+use App\Models\AnnouncementView;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -16,15 +17,23 @@ class AnnouncementController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Announcement::query()
-            ->where('is_active', true)
-            ->whereNotNull('published_at')
-            ->where(function ($q) {
-                $q->whereNull('expired_at')
-                    ->orWhere('expired_at', '>=', now());
-            });
+        $query = Announcement::published();
+        $user = $request->user();
 
-        // 🔍 SEARCH
+        $query->where(function ($q) use ($user) {
+
+            if (! $user) {
+                // Guest hanya boleh lihat announcement untuk all
+                $q->where('target_audience', 'all');
+                return;
+            }
+
+            $role = $user->role->value; // student / alumni
+
+            $q->where('target_audience', 'all')
+                ->orWhere('target_audience', $role);
+        });
+
         if ($request->filled('search')) {
             $search = $request->string('search');
 
@@ -34,17 +43,12 @@ class AnnouncementController extends Controller
             });
         }
 
-        // 🎯 FILTERS
         if ($request->filled('category')) {
             $query->where('category', $request->string('category'));
         }
 
         if ($request->filled('priority')) {
             $query->where('priority', $request->string('priority'));
-        }
-
-        if ($request->filled('target')) {
-            $query->where('target_audience', $request->string('target'));
         }
 
         $announcements = $query
@@ -59,11 +63,8 @@ class AnnouncementController extends Controller
                 'published_at' => $a->published_at,
             ]);
 
-        return response()->json([
-            'data' => $announcements,
-        ]);
+        return response()->json(['data' => $announcements]);
     }
-
 
     /**
      * GET /api/v1/announcements/{id}
@@ -71,19 +72,29 @@ class AnnouncementController extends Controller
      */
     public function show(Request $request, Announcement $announcement)
     {
-        // Guard publik (WAJIB)
-        if (
-            ! $announcement->is_active ||
-            $announcement->published_at === null ||
-            ($announcement->expired_at !== null && $announcement->expired_at < now())
-        ) {
+        // 1️⃣ Lifecycle guard
+        if (! $announcement->isPublished()) {
             abort(404);
         }
 
-        // Log announcement view (guest allowed)
-        DB::table('announcement_views')->insert([
+        // 2️⃣ Audience guard
+        $user = $request->user();
+
+        if ($announcement->target_audience !== 'all') {
+
+            if (! $user) {
+                abort(404);
+            }
+
+            if ($announcement->target_audience !== $user->role->value) {
+                abort(404);
+            }
+        }
+
+        // 3️⃣ Log view
+        AnnouncementView::create([
             'announcement_id' => $announcement->id,
-            'user_id'         => optional($request->user())->id,
+            'user_id'         => optional($user)->id,
             'viewed_at'       => now(),
         ]);
 

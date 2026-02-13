@@ -27,4 +27,9 @@ class AnnouncementView extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function isGuest(): bool
+    {
+        return $this->user_id === null;
+    }
 }
