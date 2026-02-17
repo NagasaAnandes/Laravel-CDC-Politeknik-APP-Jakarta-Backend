@@ -6,7 +6,8 @@ use Filament\Forms;
 use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Section;
 use Filament\Forms\Components\FileUpload;
-
+use App\Models\Company;
+use Illuminate\Support\Facades\Auth;
 
 class JobVacancyForm
 {
@@ -17,9 +18,36 @@ class JobVacancyForm
                 ->required()
                 ->maxLength(255),
 
-            Forms\Components\TextInput::make('company_name')
+            Forms\Components\Select::make('company_id')
+                ->label('Company')
+                ->relationship('company', 'name')
+                ->searchable()
+                ->preload()
                 ->required()
-                ->maxLength(255),
+                ->reactive()
+                ->afterStateUpdated(function ($state, callable $set) {
+                    $company = \App\Models\Company::find($state);
+                    $set('company_name', $company?->name);
+                }),
+
+            Forms\Components\TextInput::make('company_name')
+                ->label('Company Name')
+                ->disabled()
+                ->dehydrated(true)
+                ->afterStateHydrated(function ($component, $record) {
+                    if ($record?->company) {
+                        $component->state($record->company->name);
+                    }
+                })
+                ->dehydrateStateUsing(function ($state, $get) {
+                    $companyId = $get('company_id');
+
+                    if ($companyId) {
+                        return \App\Models\Company::find($companyId)?->name;
+                    }
+
+                    return $state;
+                }),
 
             Forms\Components\TextInput::make('location')
                 ->maxLength(100),

@@ -29,6 +29,7 @@ class User extends Authenticatable implements FilamentUser
         'linkedin_url',
         'graduation_year',
         'program_study',
+        'company_id',
     ];
 
     /**
@@ -59,6 +60,11 @@ class User extends Authenticatable implements FilamentUser
     public function isAdmin(): bool
     {
         return $this->role?->isAdmin() === true;
+    }
+
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
     }
 
     /**
