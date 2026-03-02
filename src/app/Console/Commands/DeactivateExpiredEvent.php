@@ -6,7 +6,7 @@ use Illuminate\Console\Command;
 use App\Models\Event;
 use Illuminate\Support\Facades\DB;
 
-class DeactivateExpiredEvents extends Command
+class DeactivateExpiredEvent extends Command
 {
     protected $signature = 'events:deactivate-expired';
 
