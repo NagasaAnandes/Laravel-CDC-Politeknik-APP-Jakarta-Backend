@@ -19,15 +19,15 @@ class AuthController extends Controller
 
         $user = User::where('email', $data['email'])->first();
 
-        if (! $user) {
+        $passwordValid = $user
+            ? Hash::check($data['password'], $user->password)
+            : Hash::check($data['password'], bcrypt('dummy-password'));
+
+        if (! $user || ! $passwordValid) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if (! Hash::check($data['password'], $user->password)) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        if ($user->status !== 'active') {
+        if (! $user->isActive()) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -35,7 +35,9 @@ class AuthController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $token = $user->createToken('api-token')->plainTextToken;
+        $token = $user
+            ->createToken('api-token')
+            ->plainTextToken;
 
         return response()->json([
             'token' => $token,
@@ -46,9 +48,8 @@ class AuthController extends Controller
                 'email' => $user->email,
                 'role' => $user->role?->value ?? null,
             ],
-        ], 200);
+        ]);
     }
-
     /**
      * Revoke current access token.
      */

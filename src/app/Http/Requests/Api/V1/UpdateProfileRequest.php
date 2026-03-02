@@ -22,11 +22,42 @@ class UpdateProfileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
-            'linkedin_url' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'graduation_year' => ['sometimes', 'nullable', 'integer', 'digits:4'],
-            'program_study' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'name' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:255',
+            ],
+
+            'phone' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:50',
+            ],
+
+            'linkedin_url' => [
+                'sometimes',
+                'nullable',
+                'url',
+                'max:255',
+            ],
+
+            'graduation_year' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                'digits:4',
+                'min:1970',
+                'max:' . now()->year,
+            ],
+
+            'program_study' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:255',
+            ],
         ];
     }
 }

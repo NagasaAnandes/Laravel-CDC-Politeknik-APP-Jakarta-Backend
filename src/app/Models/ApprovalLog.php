@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ApprovalLog extends Model
 {
+    protected $table = 'approval_logs';
+
     protected $fillable = [
         'approvable_type',
         'approvable_id',

@@ -9,13 +9,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('approval_logs', function (Blueprint $table) {
+
             $table->id();
 
+            // Polymorphic relation
             $table->morphs('approvable');
+            // creates:
+            // approvable_type (string)
+            // approvable_id (unsignedBigInt)
+            // + composite index
 
-            $table->string('from_status', 20);
-            $table->string('to_status', 20);
-            $table->string('action', 50);
+            $table->string('from_status')->nullable();
+            $table->string('to_status');
+
+            $table->string('action');
+            // submit / approve / reject / cancel / auto_approve etc
 
             $table->foreignId('performed_by')
                 ->constrained('users')
@@ -24,6 +32,11 @@ return new class extends Migration
             $table->text('reason')->nullable();
 
             $table->timestamps();
+
+            // Extra indexes for production analytics
+            $table->index('action');
+            $table->index('to_status');
+            $table->index(['approvable_type', 'to_status']);
         });
     }
 

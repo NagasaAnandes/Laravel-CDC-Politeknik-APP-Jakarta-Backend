@@ -36,14 +36,6 @@ class JobClickStats extends BaseWidget
             Stat::make('Total Clicks', $totalClicks)
                 ->description('All time')
                 ->color('info'),
-
-            // Stat::make('Clicks (30 Days)', $clicksLast30)
-            //     ->description('Recent activity')
-            //     ->color('warning'),
-
-            // Stat::make('Guest Clicks', $guestClicks)
-            //     ->description('Unauthenticated users')
-            //     ->color('gray'),
         ];
     }
 }

@@ -23,13 +23,15 @@ class User extends Authenticatable implements FilamentUser
         'name',
         'email',
         'password',
+
         'role',
-        'status',
+        'is_active',
+        'company_id',
+
         'phone',
         'linkedin_url',
         'graduation_year',
         'program_study',
-        'company_id',
     ];
 
     /**
@@ -51,20 +53,48 @@ class User extends Authenticatable implements FilamentUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'role' => UserRole::class,
+            'is_active' => 'boolean',
         ];
+    }
+
+    protected static function booted()
+    {
+        static::saving(function ($user) {
+
+            if ($user->role?->isAdmin()) {
+                $user->company_id = null;
+            }
+
+            if ($user->role === UserRole::COMPANY && ! $user->company_id) {
+                throw new \LogicException(
+                    'Company user must have company_id.'
+                );
+            }
+        });
+
+        static::updating(function ($user) {
+
+            if ($user->isDirty('role')) {
+                throw new \LogicException('Role cannot be changed directly.');
+            }
+
+            if ($user->isDirty('is_active')) {
+                throw new \LogicException('Status cannot be changed directly.');
+            }
+        });
     }
 
     /**
      * Check if user is admin (super_admin or admin_cdc).
      */
-    public function isAdmin(): bool
-    {
-        return $this->role?->isAdmin() === true;
-    }
-
     public function company()
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role?->isAdmin() === true;
     }
 
     /**
@@ -72,11 +102,15 @@ class User extends Authenticatable implements FilamentUser
      */
     public function isActive(): bool
     {
-        return $this->status === 'active';
+        return $this->is_active === true;
     }
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->isActive() && $this->isAdmin();
+        return match ($panel->getId()) {
+            'admin' => $this->isActive() && $this->role?->isAdmin(),
+            'partner' => $this->isActive() && $this->role === UserRole::COMPANY,
+            default => false,
+        };
     }
 }

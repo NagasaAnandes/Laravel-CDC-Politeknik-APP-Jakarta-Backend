@@ -15,22 +15,18 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
-        if (! $user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
         return response()->json([
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
-            'role' => $user->role?->value ?? $user->role,
+            'role' => $user->role?->value,
             'profile' => [
-                'phone' => $user->phone ?? null,
-                'linkedin_url' => $user->linkedin_url ?? null,
-                'graduation_year' => $user->graduation_year ?? null,
-                'program_study' => $user->program_study ?? null,
+                'phone' => $user->phone,
+                'linkedin_url' => $user->linkedin_url,
+                'graduation_year' => $user->graduation_year,
+                'program_study' => $user->program_study,
             ],
-        ], 200);
+        ]);
     }
 
     /**
@@ -40,13 +36,6 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
-        if (! $user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        $validated = $request->validated();
-
-        // Whitelist allowed updatable fields to be extra-safe.
         $allowed = [
             'name',
             'phone',
@@ -55,22 +44,24 @@ class ProfileController extends Controller
             'program_study',
         ];
 
-        $data = array_intersect_key($validated, array_flip($allowed));
+        $user->fill(
+            array_intersect_key(
+                $request->validated(),
+                array_flip($allowed)
+            )
+        );
 
-        if (! empty($data)) {
-            $user->fill($data);
-            $user->save();
-        }
+        $user->save();
 
         return response()->json([
             'message' => 'Profile updated successfully',
             'profile' => [
                 'name' => $user->name,
-                'phone' => $user->phone ?? null,
-                'linkedin_url' => $user->linkedin_url ?? null,
-                'graduation_year' => $user->graduation_year ?? null,
-                'program_study' => $user->program_study ?? null,
+                'phone' => $user->phone,
+                'linkedin_url' => $user->linkedin_url,
+                'graduation_year' => $user->graduation_year,
+                'program_study' => $user->program_study,
             ],
-        ], 200);
+        ]);
     }
 }

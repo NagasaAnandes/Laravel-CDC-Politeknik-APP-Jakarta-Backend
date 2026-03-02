@@ -3,40 +3,88 @@
 namespace App\Models;
 
 use App\Enums\ApprovalStatus;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Facades\Storage;
+use App\Models\ApprovalLog;
+use App\Models\User;
 
 class JobVacancy extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
-    protected $fillable = [
-        'company_id',
-        'title',
-        'company_name',
-        'location',
-        'employment_type',
-        'description',
-        'external_apply_url',
+    /*
+    |--------------------------------------------------------------------------
+    | Mass Assignment Protection
+    |--------------------------------------------------------------------------
+    */
+
+    protected $guarded = [
+        // Workflow fields (controlled by ApprovalService)
+        'approval_status',
+        'submitted_at',
+        'approved_at',
+        'approved_by',
+        'rejected_at',
+        'rejected_by',
+        'rejection_reason',
+
+        // Publication fields (controlled by Service)
         'is_active',
         'published_at',
-        'expired_at',
-        'poster_path',
-
     ];
 
+    /*
+    |--------------------------------------------------------------------------
+    | Casting
+    |--------------------------------------------------------------------------
+    */
+
     protected $casts = [
-        'is_active' => 'boolean',
+        'approval_status' => ApprovalStatus::class,
+
+        'is_active'   => 'boolean',
         'published_at' => 'datetime',
-        'expired_at' => 'date',
+        'expired_at'  => 'date',
+
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
-        'approval_status' => ApprovalStatus::class,
     ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Defaults
+    |--------------------------------------------------------------------------
+    */
+
+    protected $attributes = [
+        'approval_status' => 'draft',
+        'is_active' => false,
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Model Guard (Ownership Only)
+    |--------------------------------------------------------------------------
+    */
+
+    protected static function booted()
+    {
+        static::updating(function ($model) {
+
+            // 🔒 Ownership immutable
+            if ($model->isDirty('company_id')) {
+                throw new \LogicException(
+                    'Company ownership cannot be changed.'
+                );
+            }
+        });
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -44,9 +92,14 @@ class JobVacancy extends Model
     |--------------------------------------------------------------------------
     */
 
-    public function applicationLogs()
+    public function company(): BelongsTo
     {
-        return $this->hasMany(JobApplicationLog::class);
+        return $this->belongsTo(Company::class);
+    }
+
+    public function approvalLogs(): MorphMany
+    {
+        return $this->morphMany(ApprovalLog::class, 'approvable');
     }
 
     public function approvedBy(): BelongsTo
@@ -59,49 +112,69 @@ class JobVacancy extends Model
         return $this->belongsTo(User::class, 'rejected_by');
     }
 
-    public function approvalLogs(): MorphMany
+    public function applicationLogs()
     {
-        return $this->morphMany(ApprovalLog::class, 'approvable');
-    }
-
-    public function company(): BelongsTo
-    {
-        return $this->belongsTo(Company::class);
+        return $this->hasMany(JobApplicationLog::class);
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Lifecycle
+    | State Helpers (Pure Read-Only)
     |--------------------------------------------------------------------------
     */
 
-    public function isPublished(): bool
+    public function isDraft(): bool
     {
-        if ($this->approval_status !== ApprovalStatus::APPROVED) {
-            return false;
-        }
+        return $this->approval_status === ApprovalStatus::DRAFT;
+    }
 
-        if (! $this->is_active) {
-            return false;
-        }
+    public function isPending(): bool
+    {
+        return $this->approval_status === ApprovalStatus::PENDING;
+    }
 
+    public function isApproved(): bool
+    {
+        return $this->approval_status === ApprovalStatus::APPROVED;
+    }
+
+    public function isRejected(): bool
+    {
+        return $this->approval_status === ApprovalStatus::REJECTED;
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->expired_at?->isPast() === true;
+    }
+
+    public function isPublishWindowOpen(): bool
+    {
         if (! $this->published_at || $this->published_at->isFuture()) {
             return false;
         }
 
-        if ($this->expired_at && $this->expired_at->isPast()) {
+        if ($this->isExpired()) {
             return false;
         }
 
         return true;
     }
 
-    public function isPubliclyVisible(): bool
+    public function isPublished(): bool
     {
-        return $this->isPublished();
+        return $this->isApproved()
+            && $this->is_active
+            && $this->isPublishWindowOpen();
     }
 
-    public function scopePubliclyVisible($query)
+    /*
+    |--------------------------------------------------------------------------
+    | Query Scopes
+    |--------------------------------------------------------------------------
+    */
+
+    public function scopePublished(Builder $query): Builder
     {
         return $query
             ->where('approval_status', ApprovalStatus::APPROVED->value)
@@ -114,14 +187,9 @@ class JobVacancy extends Model
             });
     }
 
-    public function scopePublished($query)
-    {
-        return $query->publiclyVisible();
-    }
-
     /*
     |--------------------------------------------------------------------------
-    | Poster Accessor
+    | Accessors
     |--------------------------------------------------------------------------
     */
 

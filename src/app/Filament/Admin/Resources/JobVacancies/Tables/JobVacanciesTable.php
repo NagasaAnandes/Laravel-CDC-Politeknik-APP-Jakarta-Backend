@@ -17,9 +17,9 @@ use Filament\Forms\Components\Textarea;
 
 use App\Domain\Approval\ApprovalService;
 use App\Enums\ApprovalStatus;
+use App\Domain\Approval\Job\JobApprovalRules;
 
 use Illuminate\Support\Facades\Auth;
-
 
 class JobVacanciesTable
 {
@@ -29,9 +29,6 @@ class JobVacanciesTable
             ->columns([
                 TextColumn::make('title')
                     ->searchable()
-                    ->sortable(),
-
-                TextColumn::make('company_name')
                     ->sortable(),
 
                 TextColumn::make('employment_type')
@@ -99,7 +96,11 @@ class JobVacanciesTable
                         }
 
                         app(ApprovalService::class)
-                            ->approve($record, $user);
+                            ->approve(
+                                $record,
+                                $user,
+                                new JobApprovalRules()
+                            );
 
                         Notification::make()
                             ->title('Job approved successfully')
@@ -128,7 +129,14 @@ class JobVacanciesTable
                         }
 
                         app(ApprovalService::class)
-                            ->reject($record, $user, $data['reason']);
+                            ->reject(
+                                $record,
+                                $user,
+                                $data['reason'],
+                                new JobApprovalRules()
+                            );
+
+
 
                         Notification::make()
                             ->title('Job rejected')
@@ -136,12 +144,48 @@ class JobVacanciesTable
                             ->send();
                     }),
 
-                DeleteAction::make(),
+                DeleteAction::make()
+                    ->visible(function ($record) {
+
+                        /** @var \App\Models\User|null $user */
+                        $user = Auth::user();
+
+                        return $user?->can('delete', $record) === true;
+                    })
+                    ->action(function ($record) {
+
+                        /** @var \App\Models\User|null $user */
+                        $user = Auth::user();
+
+                        if (! $user || ! $user->can('delete', $record)) {
+                            abort(403);
+                        }
+
+                        $record->delete();
+                    })
+
             ])
 
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->requiresConfirmation()
+                        ->action(function ($records) {
+
+                            /** @var \App\Models\User|null $user */
+                            $user = Auth::user();
+
+                            foreach ($records as $record) {
+
+                                if (! $user || ! $user->can('delete', $record)) {
+                                    abort(403);
+                                }
+
+                                $record->delete();
+                            }
+                        })
+                        ->requiresConfirmation()
+
                 ]),
             ]);
     }

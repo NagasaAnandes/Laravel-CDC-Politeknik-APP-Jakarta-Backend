@@ -6,17 +6,22 @@ use Filament\Forms;
 use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Section;
 use Filament\Forms\Components\FileUpload;
-use App\Models\Company;
-use Illuminate\Support\Facades\Auth;
 
 class JobVacancyForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
+
             Forms\Components\TextInput::make('title')
                 ->required()
                 ->maxLength(255),
+
+            /*
+            |--------------------------------------------------------------------------
+            | Company (Immutable After Create)
+            |--------------------------------------------------------------------------
+            */
 
             Forms\Components\Select::make('company_id')
                 ->label('Company')
@@ -24,30 +29,8 @@ class JobVacancyForm
                 ->searchable()
                 ->preload()
                 ->required()
-                ->reactive()
-                ->afterStateUpdated(function ($state, callable $set) {
-                    $company = \App\Models\Company::find($state);
-                    $set('company_name', $company?->name);
-                }),
-
-            Forms\Components\TextInput::make('company_name')
-                ->label('Company Name')
-                ->disabled()
-                ->dehydrated(true)
-                ->afterStateHydrated(function ($component, $record) {
-                    if ($record?->company) {
-                        $component->state($record->company->name);
-                    }
-                })
-                ->dehydrateStateUsing(function ($state, $get) {
-                    $companyId = $get('company_id');
-
-                    if ($companyId) {
-                        return \App\Models\Company::find($companyId)?->name;
-                    }
-
-                    return $state;
-                }),
+                ->disabled(fn($record) => $record !== null) // 🔒 immutable after create
+                ->dehydrated(fn($record) => $record === null), // prevent update mutation
 
             Forms\Components\TextInput::make('location')
                 ->maxLength(100),
@@ -56,8 +39,8 @@ class JobVacancyForm
                 ->options([
                     'fulltime' => 'Full Time',
                     'parttime' => 'Part Time',
-                    'intern' => 'Internship',
-                    'remote' => 'Remote',
+                    'intern'   => 'Internship',
+                    'remote'   => 'Remote',
                 ])
                 ->required(),
 
@@ -81,25 +64,53 @@ class JobVacancyForm
                 ->visibility('public')
                 ->imagePreviewHeight('200')
                 ->maxSize(2048)
-                ->nullable()
-                ->helperText('Poster lowongan (opsional). JPG / PNG / WEBP'),
+                ->nullable(),
 
+            /*
+            |--------------------------------------------------------------------------
+            | Read-Only Workflow Display
+            |--------------------------------------------------------------------------
+            */
 
-            Section::make('Publication Settings')
-                ->description('Pengaturan visibilitas lowongan ke mahasiswa')
+            Section::make('Publication Status')
                 ->schema([
-                    Forms\Components\Toggle::make('is_active')
-                        ->label('Active')
-                        ->helperText('Jika nonaktif, lowongan tidak akan tampil di publik')
-                        ->default(true),
 
-                    Forms\Components\DateTimePicker::make('published_at')
-                        ->label('Publish At')
-                        ->helperText('Kosongkan untuk publish langsung'),
+                    Forms\Components\TextInput::make('approval_status_display')
+                        ->label('Approval Status')
+                        ->formatStateUsing(
+                            fn($record) => $record?->approval_status?->label()
+                        )
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('publish_status_display')
+                        ->label('Published')
+                        ->formatStateUsing(
+                            fn($record) =>
+                            $record?->isPublished() ? 'Yes' : 'No'
+                        )
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('published_at_display')
+                        ->label('Published At')
+                        ->formatStateUsing(
+                            fn($record) =>
+                            $record?->published_at?->toDateTimeString() ?? '—'
+                        )
+                        ->disabled()
+                        ->dehydrated(false),
 
                     Forms\Components\DatePicker::make('expired_at')
                         ->label('Expire At')
-                        ->helperText('Lowongan tidak akan tampil setelah tanggal ini'),
+                        ->helperText('Lowongan tidak tampil setelah tanggal ini')
+                        ->minDate(now())
+                        ->nullable()
+                        ->rules([
+                            'nullable',
+                            'date',
+                            'after_or_equal:today',
+                        ]),
                 ]),
         ]);
     }

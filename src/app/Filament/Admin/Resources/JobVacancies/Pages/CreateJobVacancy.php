@@ -4,24 +4,46 @@ namespace App\Filament\Admin\Resources\JobVacancies\Pages;
 
 use App\Filament\Admin\Resources\JobVacancies\JobVacancyResource;
 use Filament\Resources\Pages\CreateRecord;
+use App\Domain\Approval\ApprovalService;
 use Illuminate\Support\Facades\Auth;
+use App\Domain\Approval\Job\JobApprovalRules;
 
 class CreateJobVacancy extends CreateRecord
 {
     protected static string $resource = JobVacancyResource::class;
 
-    protected function mutateFormDataBeforeCreate(array $data): array
+    protected function afterCreate(): void
     {
-        if (Auth::user()?->role === \App\Enums\UserRole::COMPANY) {
-            $data['company_id'] = Auth::user()->company_id;
-        }
-        if (
-            ($data['is_active'] ?? false) === true &&
-            empty($data['published_at'])
-        ) {
-            $data['published_at'] = now();
+        $user = Auth::user();
+
+        if (! $user) {
+            return;
         }
 
-        return $data;
+        $service = app(ApprovalService::class);
+        $rules   = app(JobApprovalRules::class);
+
+        if ($user->role->isAdmin()) {
+
+            // Admin auto-submit then approve
+            $service->submit(
+                model: $this->record,
+                actor: $user,
+                rules: $rules
+            );
+
+            $service->approve(
+                model: $this->record,
+                actor: $user,
+                rules: $rules
+            );
+        } else {
+
+            $service->submit(
+                model: $this->record,
+                actor: $user,
+                rules: $rules
+            );
+        }
     }
 }

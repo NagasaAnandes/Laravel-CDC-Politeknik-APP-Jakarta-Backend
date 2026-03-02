@@ -2,128 +2,258 @@
 
 namespace App\Domain\Approval;
 
+use App\Domain\Approval\Contracts\ApprovalRules;
+use App\Domain\Approval\Exceptions\InvalidTransitionException;
 use App\Enums\ApprovalStatus;
 use App\Models\ApprovalLog;
-use App\Models\JobVacancy;
 use App\Models\User;
-use App\Domain\Approval\Exceptions\InvalidTransitionException;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
 class ApprovalService
 {
-    public function submit(JobVacancy $job, User $actor): JobVacancy
-    {
-        return DB::transaction(function () use ($job, $actor) {
+    /**
+     * Explicit transition matrix.
+     * Single source of truth.
+     */
+    protected array $transitions = [
+        ApprovalStatus::DRAFT->value => [
+            ApprovalStatus::PENDING->value,
+        ],
+        ApprovalStatus::PENDING->value => [
+            ApprovalStatus::APPROVED->value,
+            ApprovalStatus::REJECTED->value,
+        ],
+        ApprovalStatus::REJECTED->value => [
+            ApprovalStatus::DRAFT->value,
+        ],
+        ApprovalStatus::APPROVED->value => [
+            ApprovalStatus::DRAFT->value,
+        ],
+    ];
 
-            if (! $job->approval_status->canSubmit()) {
-                throw new InvalidTransitionException('Only draft can be submitted.');
+    /*
+    |--------------------------------------------------------------------------
+    | PUBLIC API
+    |--------------------------------------------------------------------------
+    */
+
+    public function submit(Model $model, User $actor, ApprovalRules $rules): Model
+    {
+        return $this->transition(
+            model: $model,
+            actor: $actor,
+            to: ApprovalStatus::PENDING,
+            action: 'submit',
+            rules: $rules
+        );
+    }
+
+    public function approve(Model $model, User $actor, ApprovalRules $rules): Model
+    {
+        return $this->transition(
+            model: $model,
+            actor: $actor,
+            to: ApprovalStatus::APPROVED,
+            action: 'approve',
+            rules: $rules
+        );
+    }
+
+    public function revert(Model $model, User $actor, ApprovalRules $rules): Model
+    {
+        return $this->transition(
+            model: $model,
+            actor: $actor,
+            to: ApprovalStatus::DRAFT,
+            action: 'revert',
+            rules: $rules
+        );
+    }
+
+    public function reject(
+        Model $model,
+        User $actor,
+        string $reason,
+        ApprovalRules $rules
+    ): Model {
+        return $this->transition(
+            model: $model,
+            actor: $actor,
+            to: ApprovalStatus::REJECTED,
+            action: 'reject',
+            rules: $rules,
+            reason: $reason
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CORE ENGINE
+    |--------------------------------------------------------------------------
+    */
+
+    protected function transition(
+        Model $model,
+        User $actor,
+        ApprovalStatus $to,
+        string $action,
+        ApprovalRules $rules,
+        ?string $reason = null
+    ): Model {
+
+        return DB::transaction(function () use (
+            $model,
+            $actor,
+            $to,
+            $action,
+            $rules,
+            $reason
+        ) {
+
+            // Lock fresh model instance
+            $model = $this->lock($model);
+
+            // Soft delete protection
+            if (method_exists($model, 'trashed') && $model->trashed()) {
+                throw new InvalidTransitionException('Cannot transition soft-deleted model.');
             }
 
-            $from = $job->approval_status;
+            $from = $model->approval_status;
 
-            $job->approval_status = ApprovalStatus::PENDING;
-            $job->submitted_at = now();
-            $job->rejected_at = null;
-            $job->rejected_by = null;
-            $job->rejection_reason = null;
+            if (! $from instanceof ApprovalStatus) {
+                throw new \LogicException('approval_status must be casted to ApprovalStatus enum.');
+            }
 
-            $job->save();
+            // Validate transition via explicit matrix
+            if (! $this->canTransition($from, $to)) {
+                throw new InvalidTransitionException(
+                    "Invalid transition from {$from->value} to {$to->value}"
+                );
+            }
 
-            $this->log($job, $from, ApprovalStatus::PENDING, 'submit', $actor);
+            /*
+            |--------------------------------------------------------------------------
+            | Authorization (Explicit Boolean Contract)
+            |--------------------------------------------------------------------------
+            */
 
-            return $job;
+            if (! $this->authorize($action, $rules, $model, $actor, $reason)) {
+                throw new AuthorizationException("Unauthorized action: {$action}");
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Pre-transition Hook (Domain Invariant Validation)
+            |--------------------------------------------------------------------------
+            */
+            $rules->validateTransition($model, $actor, $from, $to);
+
+            /*
+            |--------------------------------------------------------------------------
+            | Apply State
+            |--------------------------------------------------------------------------
+            */
+
+            if (method_exists($model, 'bypassWorkflowGuard')) {
+                $model->bypassWorkflowGuard();
+            }
+
+            $model->approval_status = $to;
+
+            match ($action) {
+                'submit'  => $rules->onSubmit($model, $actor),
+                'approve' => $rules->onApprove($model, $actor),
+                'reject'  => $rules->onReject($model, $actor, $reason),
+                'revert'  => $rules->onRevert($model, $actor),
+            };
+
+            $model->save();
+
+            /*
+            |--------------------------------------------------------------------------
+            | Lifecycle Hooks
+            |--------------------------------------------------------------------------
+            */
+
+            /*
+            |--------------------------------------------------------------------------
+            | Logging (Immutable Audit Trail)
+            |--------------------------------------------------------------------------
+            */
+
+            $this->log($model, $from, $to, $action, $actor, $reason);
+
+            /*
+            |--------------------------------------------------------------------------
+            | Post-transition Hook
+            |--------------------------------------------------------------------------
+            */
+
+            return $model;
         });
     }
 
-    public function approve(JobVacancy $job, User $admin): JobVacancy
+    /*
+    |--------------------------------------------------------------------------
+    | INTERNAL METHODS
+    |--------------------------------------------------------------------------
+    */
+
+    protected function lock(Model $model): Model
     {
-        return DB::transaction(function () use ($job, $admin) {
-
-            if (! $job->approval_status->canApprove()) {
-                throw new InvalidTransitionException('Only pending jobs can be approved.');
-            }
-
-            $from = $job->approval_status;
-
-            $job->approval_status = ApprovalStatus::APPROVED;
-            $job->approved_at = now();
-            $job->approved_by = $admin->id;
-
-            if (! $job->published_at) {
-                $job->published_at = now();
-            }
-
-            $job->save();
-
-            $this->log($job, $from, ApprovalStatus::APPROVED, 'approve', $admin);
-
-            return $job;
-        });
+        return $model::query()
+            ->whereKey($model->getKey())
+            ->lockForUpdate()
+            ->firstOrFail();
     }
 
-    public function reject(JobVacancy $job, User $admin, string $reason): JobVacancy
-    {
-        return DB::transaction(function () use ($job, $admin, $reason) {
-
-            if (! $job->approval_status->canReject()) {
-                throw new InvalidTransitionException('Only pending jobs can be rejected.');
-            }
-
-            $from = $job->approval_status;
-
-            $job->approval_status = ApprovalStatus::REJECTED;
-            $job->rejected_at = now();
-            $job->rejected_by = $admin->id;
-            $job->rejection_reason = $reason;
-
-            $job->save();
-
-            $this->log($job, $from, ApprovalStatus::REJECTED, 'reject', $admin, $reason);
-
-            return $job;
-        });
+    protected function canTransition(
+        ApprovalStatus $from,
+        ApprovalStatus $to
+    ): bool {
+        return in_array(
+            $to->value,
+            $this->transitions[$from->value] ?? [],
+            true
+        );
     }
 
-    public function resubmit(JobVacancy $job, User $actor): JobVacancy
-    {
-        return DB::transaction(function () use ($job, $actor) {
+    protected function authorize(
+        string $action,
+        ApprovalRules $rules,
+        Model $model,
+        User $actor,
+        ?string $reason = null
+    ): bool {
 
-            if (! $job->approval_status->canResubmit()) {
-                throw new InvalidTransitionException('Only rejected jobs can be resubmitted.');
-            }
-
-            $from = $job->approval_status;
-
-            $job->approval_status = ApprovalStatus::PENDING;
-            $job->submitted_at = now();
-            $job->rejected_at = null;
-            $job->rejected_by = null;
-            $job->rejection_reason = null;
-
-            $job->save();
-
-            $this->log($job, $from, ApprovalStatus::PENDING, 'resubmit', $actor);
-
-            return $job;
-        });
+        return match ($action) {
+            'submit'  => $rules->canSubmit($model, $actor),
+            'approve' => $rules->canApprove($model, $actor),
+            'reject'  => $rules->canReject($model, $actor, $reason),
+            'revert'  => $rules->canRevert($model, $actor),
+            default   => false,
+        };
     }
 
     protected function log(
-        JobVacancy $job,
+        Model $model,
         ApprovalStatus $from,
         ApprovalStatus $to,
         string $action,
         User $actor,
         ?string $reason = null
     ): void {
+
         ApprovalLog::create([
-            'approvable_type' => $job->getMorphClass(),
-            'approvable_id' => $job->id,
-            'from_status' => $from->value,
-            'to_status' => $to->value,
-            'action' => $action,
-            'performed_by' => $actor->id,
-            'reason' => $reason,
+            'approvable_type' => $model->getMorphClass(),
+            'approvable_id'   => $model->getKey(),
+            'from_status'     => $from->value,
+            'to_status'       => $to->value,
+            'action'          => $action,
+            'performed_by'    => $actor->getKey(),
+            'reason'          => $reason,
         ]);
     }
 }

@@ -2,39 +2,171 @@
 
 namespace App\Models;
 
+use App\Enums\ApprovalStatus;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth;
 
 class Event extends Model
 {
-    protected $fillable = [
-        'title',
-        'description',
-        'event_type',
-        'organizer',
-        'location',
-        'start_datetime',
-        'end_datetime',
-        'registration_method',
-        'registration_url',
-        'quota',
+    use SoftDeletes;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mass Assignment
+    |--------------------------------------------------------------------------
+    */
+
+    protected $guarded = [
+        'approval_status',
         'is_active',
         'published_at',
-        'poster_path',
+        'submitted_at',
+        'approved_at',
+        'approved_by',
+        'rejected_at',
+        'rejected_by',
+        'rejection_reason',
+        'cancelled_at',
+        'cancelled_by',
     ];
 
+    /*
+    |--------------------------------------------------------------------------
+    | Casting
+    |--------------------------------------------------------------------------
+    */
+
     protected $casts = [
+        'approval_status' => ApprovalStatus::class,
+
         'is_active' => 'boolean',
-        'start_datetime' => 'datetime',
-        'end_datetime' => 'datetime',
+
+        'registration_deadline' => 'date',
+
         'published_at' => 'datetime',
+        'submitted_at' => 'datetime',
+        'approved_at'  => 'datetime',
+        'rejected_at'  => 'datetime',
+        'cancelled_at' => 'datetime',
     ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Defaults
+    |--------------------------------------------------------------------------
+    */
+
+    protected $attributes = [
+        'approval_status' => 'draft',
+        'is_active' => false,
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Workflow Guard Flag
+    |--------------------------------------------------------------------------
+    */
+
+    protected bool $bypassWorkflowGuard = false;
+
+    public function bypassWorkflowGuard(): static
+    {
+        $this->bypassWorkflowGuard = true;
+        return $this;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Model Events (Hard Guard)
+    |--------------------------------------------------------------------------
+    */
+
+    protected static function booted()
+    {
+        static::creating(function ($model) {
+
+            $user = Auth::user();
+
+            if (! $user) {
+                return;
+            }
+
+            if ($user->role?->isCompany()) {
+                $model->company_id = $user->company_id;
+            }
+        });
+
+        static::updating(function ($model) {
+
+            if ($model->bypassWorkflowGuard) {
+                return;
+            }
+
+            if (
+                $model->isDirty('approval_status') ||
+                $model->isDirty('submitted_at') ||
+                $model->isDirty('approved_at') ||
+                $model->isDirty('approved_by') ||
+                $model->isDirty('rejected_at') ||
+                $model->isDirty('rejected_by') ||
+                $model->isDirty('rejection_reason') ||
+                $model->isDirty('cancelled_at') ||
+                $model->isDirty('cancelled_by')
+            ) {
+                throw new \LogicException(
+                    'Event workflow must be changed via ApprovalService.'
+                );
+            }
+
+            if (
+                $model->isDirty('is_active') ||
+                $model->isDirty('published_at')
+            ) {
+                throw new \LogicException(
+                    'Publication must be changed via ApprovalService.'
+                );
+            }
+
+            if (
+                $model->isDirty('company_id') &&
+                $model->getOriginal('company_id') !== null
+            ) {
+                throw new \LogicException(
+                    'Event ownership cannot be changed.'
+                );
+            }
+        });
+    }
 
     /*
     |--------------------------------------------------------------------------
     | Relationships
     |--------------------------------------------------------------------------
     */
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function rejectedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
+    }
+
+    public function approvalLogs(): MorphMany
+    {
+        return $this->morphMany(ApprovalLog::class, 'approvable');
+    }
 
     public function viewLogs()
     {
@@ -48,70 +180,112 @@ class Event extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | Lifecycle
+    | Lifecycle Helpers
     |--------------------------------------------------------------------------
     */
 
-    public function isPublished(): bool
+    public function isApproved(): bool
     {
-        if (! $this->is_active) {
-            return false;
-        }
+        return $this->approval_status === ApprovalStatus::APPROVED;
+    }
 
-        if ($this->published_at && $this->published_at->isFuture()) {
-            return false;
-        }
+    public function isRejected(): bool
+    {
+        return $this->approval_status === ApprovalStatus::REJECTED;
+    }
 
-        // Event dianggap expired jika end_datetime sudah lewat
-        if ($this->end_datetime && $this->end_datetime->isPast()) {
+    public function isPending(): bool
+    {
+        return $this->approval_status === ApprovalStatus::PENDING;
+    }
+
+    public function isDraft(): bool
+    {
+        return $this->approval_status === ApprovalStatus::DRAFT;
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->cancelled_at !== null;
+    }
+
+    public function isRegistrationClosed(): bool
+    {
+        return $this->registration_deadline?->isPast() === true;
+    }
+
+    public function isPublishWindowOpen(): bool
+    {
+        if (! $this->published_at || $this->published_at->isFuture()) {
             return false;
         }
 
         return true;
     }
 
-    public function scopePublished($query)
+    public function isPublished(): bool
     {
-        return $query
-            ->where('is_active', true)
-            ->where(function ($q) {
-                $q->whereNull('published_at')
-                    ->orWhere('published_at', '<=', now());
-            })
-            ->where('end_datetime', '>=', now());
+        return $this->isApproved()
+            && ! $this->isCancelled()
+            && $this->is_active
+            && $this->isPublishWindowOpen();
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Quota & Registration
+    | Scopes
     |--------------------------------------------------------------------------
     */
 
+    public function scopePublished($query)
+    {
+        return $query
+            ->where('approval_status', ApprovalStatus::APPROVED->value)
+            ->where('is_active', true)
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->whereNull('cancelled_at');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Registration & Quota
+    |--------------------------------------------------------------------------
+    */
+    public function isRegistrationOpen(): bool
+    {
+        return ! $this->isRegistrationClosed();
+    }
+
     public function isQuotaFull(): bool
     {
-        // Unlimited quota
         if ($this->quota === null) {
             return false;
         }
 
-        return $this->registrations()->count() >= $this->quota;
+        return $this->registrations_count >= $this->quota;
     }
 
     public function canRegister(): bool
     {
-        // Redirect events tidak pakai internal registration
         if ($this->registration_method !== 'internal') {
             return false;
         }
 
-        return $this->isPublished() && ! $this->isQuotaFull();
+        if ($this->isRegistrationClosed()) {
+            return false;
+        }
+
+        return $this->isPublished()
+            && ! $this->isQuotaFull();
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Poster URL Accessor
+    | Poster Accessor
     |--------------------------------------------------------------------------
     */
+
     public function getPosterUrlAttribute(): ?string
     {
         return $this->poster_path

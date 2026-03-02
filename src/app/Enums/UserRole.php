@@ -17,4 +17,14 @@ enum UserRole: string
             self::ADMIN_CDC,
         ], true);
     }
+
+    public function isCompany(): bool
+    {
+        return $this === self::COMPANY;
+    }
+
+    public function isStudent(): bool
+    {
+        return $this === self::STUDENT;
+    }
 }

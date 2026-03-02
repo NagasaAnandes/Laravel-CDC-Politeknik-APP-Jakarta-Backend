@@ -3,27 +3,50 @@
 namespace App\Http\Requests\Api\V1;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Enums\UserRole;
 
 class EventRegisterRequest extends FormRequest
 {
     /**
-     * Determine if the user is authorized to make this request.
+     * Authorization Layer
      */
     public function authorize(): bool
     {
-        // Hanya student & alumni
-        return $this->user()
-            && in_array($this->user()->role->value, ['student', 'alumni']);
+        $user = $this->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        // User must be active
+        if (! $user->isActive()) {
+            return false;
+        }
+
+        // Only student & alumni allowed
+        return in_array(
+            $user->role,
+            [UserRole::STUDENT, UserRole::ALUMNI],
+            true
+        );
     }
+
     /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * Validation Rules
      */
     public function rules(): array
     {
         return [
-            //
+            // No body payload required.
+            // Route param handles event id.
         ];
+    }
+
+    /**
+     * Custom response if unauthorized
+     */
+    protected function failedAuthorization()
+    {
+        abort(403, 'Unauthorized to register for this event.');
     }
 }
