@@ -45,7 +45,7 @@ RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.revalidate_freq=0" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.validate_timestamps=0" >> /usr/local/etc/php/conf.d/opcache.ini
 
-# Composer LOCKED version
+# Composer locked
 COPY --from=composer:2.9.3 /usr/bin/composer /usr/bin/composer
 
 # Create non-root user
@@ -53,18 +53,21 @@ RUN useradd -u ${UID} -ms /bin/bash ${USER}
 
 WORKDIR /var/www
 
-# Copy project into image
+# Copy project
 COPY . /var/www
 
-# Install Laravel dependencies
+# Move into Laravel root
+WORKDIR /var/www/src
+
+# Install dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Optimize Laravel
+# Laravel optimization
 RUN php artisan config:cache \
     && php artisan route:cache \
     && php artisan view:cache
 
-# Permissions
+# Fix permissions
 RUN chown -R ${USER}:${USER} /var/www
 
 USER ${USER}
