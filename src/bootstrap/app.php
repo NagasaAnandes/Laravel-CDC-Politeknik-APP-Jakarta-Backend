@@ -3,11 +3,13 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Console\Scheduling\Schedule;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__.'/../routes/web.php',
-        commands: __DIR__.'/../routes/console.php',
+        web: __DIR__ . '/../routes/web.php',
+        api: __DIR__ . '/../routes/api.php',
+        commands: __DIR__ . '/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
@@ -15,4 +17,20 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-    })->create();
+    })
+    ->withSchedule(function (Schedule $schedule): void {
+        // Deactivate expired jobs (daily cukup)
+        $schedule
+            ->command('jobs:deactivate-expired')
+            ->daily()
+            ->withoutOverlapping()
+            ->runInBackground();
+
+        // Deactivate expired events (hourly lebih masuk akal)
+        $schedule
+            ->command('events:deactivate-expired')
+            ->hourly()
+            ->withoutOverlapping()
+            ->runInBackground();
+    })
+    ->create();

@@ -1,0 +1,23 @@
+[90m= [39m[34;4mApp\Models\JobVacancy[39;24m {#7452
+    [34mid[39m: [35m1[39m,
+    [34mtitle[39m: "[32mBackend Engineer[39m",
+    [34mcompany_name[39m: "[32masd[39m",
+    [34mlocation[39m: "[32mJakarta[39m",
+    [34memployment_type[39m: "[32mparttime[39m",
+    [34mdescription[39m: "[32masd[39m",
+    [34mposter_path[39m: "[32mjob-posters/01KH5D2KG5987MHSFARJ8G95FC.png[39m",
+    [34mexternal_apply_url[39m: "[32mhttps://www.daftar.com[39m",
+    [34mis_active[39m: [35m1[39m,
+    [34mpublished_at[39m: "[32m2026-01-16 23:50:38[39m",
+    [34mexpired_at[39m: "[32m2026-02-13[39m",
+    [34mapproval_status[39m: "[32mpending[39m",
+    [34msubmitted_at[39m: "[32m2026-02-16 20:25:15[39m",
+    [34mapproved_at[39m: [36mnull[39m,
+    [34mapproved_by[39m: [36mnull[39m,
+    [34mrejected_at[39m: [36mnull[39m,
+    [34mrejected_by[39m: [36mnull[39m,
+    [34mrejection_reason[39m: [36mnull[39m,
+    [34mcreated_at[39m: "[32m2026-01-13 10:59:43[39m",
+    [34mupdated_at[39m: "[32m2026-02-16 20:25:15[39m",
+  }
+
