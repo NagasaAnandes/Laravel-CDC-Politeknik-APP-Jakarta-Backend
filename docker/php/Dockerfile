@@ -6,7 +6,7 @@ ARG UID=1000
 ENV TZ=Asia/Jakarta \
     COMPOSER_ALLOW_SUPERUSER=1
 
-# Install system deps
+# System deps
 RUN apt-get update && apt-get install -y \
     tzdata \
     git \
@@ -32,40 +32,38 @@ RUN apt-get update && apt-get install -y \
     opcache \
     && rm -rf /var/lib/apt/lists/*
 
-# PHP-FPM listen on all interfaces
+# FPM listen all interfaces
 RUN sed -i 's|listen = 127.0.0.1:9000|listen = 9000|' /usr/local/etc/php-fpm.d/www.conf
 
-# Opcache tuning
+# FPM production tuning
+RUN echo "pm = dynamic" >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo "pm.max_children = 20" >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo "pm.start_servers = 4" >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo "pm.min_spare_servers = 2" >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo "pm.max_spare_servers = 6" >> /usr/local/etc/php-fpm.d/www.conf
+
+# Opcache
 RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/opcache.ini \
-    && echo "opcache.memory_consumption=128" >> /usr/local/etc/php/conf.d/opcache.ini \
-    && echo "opcache.interned_strings_buffer=8" >> /usr/local/etc/php/conf.d/opcache.ini \
-    && echo "opcache.max_accelerated_files=10000" >> /usr/local/etc/php/conf.d/opcache.ini \
-    && echo "opcache.revalidate_freq=0" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.memory_consumption=192" >> /usr/local/etc/php/conf.d/opcache.ini \
+    && echo "opcache.max_accelerated_files=20000" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.validate_timestamps=0" >> /usr/local/etc/php/conf.d/opcache.ini
 
-# Composer LOCKED version
+# Composer
 COPY --from=composer:2.9.3 /usr/bin/composer /usr/bin/composer
-
-# Create non-root user
-RUN useradd -u ${UID} -ms /bin/bash ${USER}
 
 WORKDIR /var/www
 
-# Copy project into image
-COPY . /var/www
+# Copy only composer first (cache optimization)
+COPY src/composer.json src/composer.lock ./
 
-# Install Laravel dependencies
-RUN composer install --no-dev --optimize-autoloader
+RUN composer install --no-dev --optimize-autoloader --no-scripts
 
-# Optimize Laravel
-RUN php artisan config:cache \
-    && php artisan route:cache \
-    && php artisan view:cache
+# Now copy full source
+COPY src/ .
 
-# Permissions
-RUN chown -R ${USER}:${USER} /var/www
-
-USER ${USER}
+# Permissions (granular)
+RUN chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
 
 EXPOSE 9000
 

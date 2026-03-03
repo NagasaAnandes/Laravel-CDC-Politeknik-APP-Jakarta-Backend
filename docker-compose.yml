@@ -15,21 +15,14 @@ services:
       - db
     networks:
       - cdc-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost/up || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   web:
     image: nginx:alpine
     container_name: cdc_web
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
     volumes:
-      - ./src:/var/www/src
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - app
