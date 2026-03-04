@@ -13,6 +13,8 @@ services:
       - "9000"
     depends_on:
       - db
+    volumes:
+      - laravel-code:/var/www
     networks:
       - cdc-network
 
@@ -23,6 +25,7 @@ services:
     ports:
       - "8080:80"
     volumes:
+      - laravel-code:/var/www
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - app
@@ -46,3 +49,4 @@ networks:
 
 volumes:
   cdc-db-data:
+  laravel-code:

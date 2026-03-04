@@ -1,8 +1,5 @@
 FROM php:8.2-fpm
 
-ARG USER=deploy
-ARG UID=1000
-
 ENV TZ=Asia/Jakarta \
     COMPOSER_ALLOW_SUPERUSER=1
 
