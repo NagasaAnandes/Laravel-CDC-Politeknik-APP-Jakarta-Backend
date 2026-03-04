@@ -14,7 +14,7 @@ services:
     depends_on:
       - db
     volumes:
-      - laravel-code:/var/www
+      - src:/var/www
     networks:
       - cdc-network
 
@@ -25,7 +25,7 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - laravel-code:/var/www
+      - src:/var/www
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - app
