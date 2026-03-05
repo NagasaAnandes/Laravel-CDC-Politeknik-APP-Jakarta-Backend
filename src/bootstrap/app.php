@@ -13,20 +13,18 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })
     ->withSchedule(function (Schedule $schedule): void {
-        // Deactivate expired jobs (daily cukup)
         $schedule
             ->command('jobs:deactivate-expired')
             ->daily()
             ->withoutOverlapping()
             ->runInBackground();
 
-        // Deactivate expired events (hourly lebih masuk akal)
         $schedule
             ->command('events:deactivate-expired')
             ->hourly()
