@@ -10,15 +10,3 @@ Route::get('/', function () {
 
     ]);
 });
-
-// Route::get('/partner', function () {
-//     return response()->json([
-//         'message' => 'Partner UI handled by frontend'
-//     ]);
-// });
-
-// Route::get('/admin', function () {
-//     return response()->json([
-//         'message' => 'Admin UI handled by frontend'
-//     ]);
-// });
