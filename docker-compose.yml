@@ -39,7 +39,7 @@ services:
     env_file:
       - .env.production
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - cdc-db-data:/var/lib/mysql
     networks:
