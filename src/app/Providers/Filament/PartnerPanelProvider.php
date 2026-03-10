@@ -26,7 +26,7 @@ class PartnerPanelProvider extends PanelProvider
             ->id('partner')
             ->path('partner')
             ->login()
-            ->homeUrl(fn() => url('/partner'))
+            ->homeUrl(config('app.url') . '/partner')
             ->colors([
                 'primary' => Color::Amber,
             ])

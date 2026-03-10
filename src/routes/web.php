@@ -10,3 +10,7 @@ Route::get('/', function () {
 
     ]);
 });
+
+Route::get('/debug-intended', function () {
+    return session()->get('url.intended');
+});

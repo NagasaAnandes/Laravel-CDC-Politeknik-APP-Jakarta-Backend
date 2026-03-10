@@ -30,7 +30,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
-            ->homeUrl(fn() => url('/admin'))
+            ->homeUrl(config('app.url') . '/admin')
             ->brandName('CDC Politeknik App Jakarta')
             // ->brandLogo(asset('images/logo.png'))
             ->colors([

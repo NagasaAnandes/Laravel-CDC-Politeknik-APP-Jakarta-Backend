@@ -75,7 +75,7 @@ class DatabaseSeeder extends Seeder
         |--------------------------------------------------------------------------
         */
 
-        for ($i = 1; $i <= 3; $i++) {
+        for ($i = 1; $i <= 2; $i++) {
             User::create([
                 'name' => "Student $i",
                 'email' => "student$i@cdc.test",
