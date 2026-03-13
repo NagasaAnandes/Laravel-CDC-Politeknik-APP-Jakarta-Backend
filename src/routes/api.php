@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\JobController;
 use App\Http\Controllers\Api\V1\EventController;
 use App\Http\Controllers\Api\V1\AnnouncementController;
+use App\Http\Controllers\Api\V1\TracerSurveyController;
 
 Route::prefix('v1')->group(function () {
 
@@ -68,5 +69,13 @@ Route::prefix('v1')->group(function () {
 
         Route::get('events/my', [EventController::class, 'myEvents'])
             ->name('events.mine');
+
+        // TRACER STUDY
+        Route::get('tracer/survey', [TracerSurveyController::class, 'survey'])
+            ->name('tracer.survey');
+
+        Route::post('tracer/submit', [TracerSurveyController::class, 'submit'])
+            ->middleware('throttle:30,1')
+            ->name('tracer.submit');
     });
 });

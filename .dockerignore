@@ -4,3 +4,4 @@ vendor
 .env
 storage/logs
 .env.production
+.env.local

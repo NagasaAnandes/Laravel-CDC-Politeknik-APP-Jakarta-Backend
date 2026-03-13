@@ -21,6 +21,7 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Filament\Admin\Widgets\JobClickStats;
 use App\Filament\Admin\Widgets\AnnouncementStats;
 use App\Filament\Admin\Widgets\EventStats;
+use App\Filament\Admin\Widgets\TracerStats;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -47,6 +48,7 @@ class AdminPanelProvider extends PanelProvider
                 JobClickStats::class,
                 AnnouncementStats::class,
                 EventStats::class,
+                TracerStats::class,
             ])
             ->middleware([
                 EncryptCookies::class,
