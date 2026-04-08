@@ -5,8 +5,8 @@ namespace App\Filament\Admin\Resources\Events\Pages;
 use App\Filament\Admin\Resources\Events\EventResource;
 use Filament\Resources\Pages\CreateRecord;
 use App\Domain\Approval\ApprovalService;
-use App\Domain\Approval\Event\EventApprovalRules;
 use Illuminate\Support\Facades\Auth;
+use App\Domain\Approval\Event\EventApprovalRules;
 
 class CreateEvent extends CreateRecord
 {
@@ -20,23 +20,31 @@ class CreateEvent extends CreateRecord
             return;
         }
 
-        // Admin langsung approve
+        $service = app(ApprovalService::class);
+        $rules   = app(EventApprovalRules::class);
+
         if ($user->role->isAdmin()) {
 
-            app(ApprovalService::class)->approve(
+            // ✅ WAJIB: submit dulu
+            $service->submit(
                 model: $this->record,
                 actor: $user,
-                rules: app(EventApprovalRules::class)
+                rules: $rules
             );
 
-            return;
-        }
+            // baru approve
+            $service->approve(
+                model: $this->record,
+                actor: $user,
+                rules: $rules
+            );
+        } else {
 
-        // Company submit
-        app(ApprovalService::class)->submit(
-            model: $this->record,
-            actor: $user,
-            rules: app(EventApprovalRules::class)
-        );
+            $service->submit(
+                model: $this->record,
+                actor: $user,
+                rules: $rules
+            );
+        }
     }
 }
