@@ -96,7 +96,6 @@ return new class extends Migration
                 (
                     approval_status = 'approved'
                     AND approved_at IS NOT NULL
-                    AND approved_by IS NOT NULL
                     AND rejected_at IS NULL
                     AND cancelled_at IS NULL
                 )
@@ -104,15 +103,12 @@ return new class extends Migration
                 (
                     approval_status = 'rejected'
                     AND rejected_at IS NOT NULL
-                    AND rejected_by IS NOT NULL
                     AND approved_at IS NULL
                     AND cancelled_at IS NULL
                 )
                 OR
                 (
-                    approval_status = 'cancelled'
-                    AND cancelled_at IS NOT NULL
-                    AND cancelled_by IS NOT NULL
+                    cancelled_at IS NOT NULL
                 )
                 OR
                 (
