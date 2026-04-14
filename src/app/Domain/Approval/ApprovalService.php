@@ -14,22 +14,24 @@ use Illuminate\Support\Facades\DB;
 class ApprovalService
 {
     /**
-     * Explicit transition matrix (FIXED)
+     * Explicit transition matrix (FINAL)
      */
     protected array $transitions = [
         ApprovalStatus::DRAFT->value => [
             ApprovalStatus::SUBMITTED->value,
         ],
+
         ApprovalStatus::SUBMITTED->value => [
             ApprovalStatus::APPROVED->value,
             ApprovalStatus::REJECTED->value,
         ],
+
         ApprovalStatus::REJECTED->value => [
             ApprovalStatus::DRAFT->value,
         ],
+
         ApprovalStatus::APPROVED->value => [
-            // ⚠️ batasi, jangan bebas revert
-            // ApprovalStatus::DRAFT->value,
+            ApprovalStatus::DRAFT->value, // ✅ FIX: allow revert
         ],
     ];
 
@@ -41,35 +43,17 @@ class ApprovalService
 
     public function submit(Model $model, User $actor, ApprovalRules $rules): Model
     {
-        return $this->transition(
-            $model,
-            $actor,
-            ApprovalStatus::SUBMITTED,
-            'submit',
-            $rules
-        );
+        return $this->transition($model, $actor, ApprovalStatus::SUBMITTED, 'submit', $rules);
     }
 
     public function approve(Model $model, User $actor, ApprovalRules $rules): Model
     {
-        return $this->transition(
-            $model,
-            $actor,
-            ApprovalStatus::APPROVED,
-            'approve',
-            $rules
-        );
+        return $this->transition($model, $actor, ApprovalStatus::APPROVED, 'approve', $rules);
     }
 
     public function revert(Model $model, User $actor, ApprovalRules $rules): Model
     {
-        return $this->transition(
-            $model,
-            $actor,
-            ApprovalStatus::DRAFT,
-            'revert',
-            $rules
-        );
+        return $this->transition($model, $actor, ApprovalStatus::DRAFT, 'revert', $rules);
     }
 
     public function reject(
@@ -78,14 +62,7 @@ class ApprovalService
         string $reason,
         ApprovalRules $rules
     ): Model {
-        return $this->transition(
-            $model,
-            $actor,
-            ApprovalStatus::REJECTED,
-            'reject',
-            $rules,
-            $reason
-        );
+        return $this->transition($model, $actor, ApprovalStatus::REJECTED, 'reject', $rules, $reason);
     }
 
     /*
@@ -103,16 +80,8 @@ class ApprovalService
         ?string $reason = null
     ): Model {
 
-        return DB::transaction(function () use (
-            $model,
-            $actor,
-            $to,
-            $action,
-            $rules,
-            $reason
-        ) {
+        return DB::transaction(function () use ($model, $actor, $to, $action, $rules, $reason) {
 
-            // 🔒 Lock row (pessimistic)
             $model = $this->lock($model);
 
             if (method_exists($model, 'trashed') && $model->trashed()) {
@@ -125,12 +94,12 @@ class ApprovalService
                 throw new \LogicException('approval_status must be casted to ApprovalStatus enum.');
             }
 
-            // 🛑 Idempotency guard
+            // 🛑 Idempotency
             if ($from === $to) {
                 return $model;
             }
 
-            // ❌ Invalid transition
+            // ❌ Transition guard (ENGINE LEVEL)
             if (! $this->canTransition($from, $to)) {
                 throw new InvalidTransitionException(
                     "Invalid transition from {$from->value} to {$to->value}"
@@ -142,10 +111,10 @@ class ApprovalService
                 throw new AuthorizationException("Unauthorized action: {$action}");
             }
 
-            // 🧠 Domain validation
+            // 🧠 Domain rules (IMPORTANT)
             $rules->validateTransition($model, $actor, $from, $to);
 
-            // ⚠️ Bypass guard (jika ada)
+            // 🔓 bypass guard (if model protected)
             if (method_exists($model, 'bypassWorkflowGuard')) {
                 $model->bypassWorkflowGuard();
             }
@@ -168,7 +137,7 @@ class ApprovalService
                 default   => throw new \LogicException("Unknown action: {$action}")
             };
 
-            // 🔥 Optimistic Locking Update
+            // 🔥 Optimistic Locking
             $updated = $model->newQuery()
                 ->whereKey($model->getKey())
                 ->where('version', $originalVersion)
@@ -181,12 +150,11 @@ class ApprovalService
                 throw new \RuntimeException('Race condition detected. Please retry.');
             }
 
-            // 🔄 Refresh model
             $model->refresh();
 
             /*
             |--------------------------------------------------------------------------
-            | LOGGING (AFTER COMMIT SAFE)
+            | LOGGING
             |--------------------------------------------------------------------------
             */
 
@@ -200,7 +168,7 @@ class ApprovalService
 
     /*
     |--------------------------------------------------------------------------
-    | INTERNAL METHODS
+    | INTERNAL
     |--------------------------------------------------------------------------
     */
 
@@ -212,10 +180,8 @@ class ApprovalService
             ->firstOrFail();
     }
 
-    protected function canTransition(
-        ApprovalStatus $from,
-        ApprovalStatus $to
-    ): bool {
+    protected function canTransition(ApprovalStatus $from, ApprovalStatus $to): bool
+    {
         return in_array(
             $to->value,
             $this->transitions[$from->value] ?? [],
@@ -230,7 +196,6 @@ class ApprovalService
         User $actor,
         ?string $reason = null
     ): bool {
-
         return match ($action) {
             'submit'  => $rules->canSubmit($model, $actor),
             'approve' => $rules->canApprove($model, $actor),
@@ -248,7 +213,6 @@ class ApprovalService
         User $actor,
         ?string $reason = null
     ): void {
-
         ApprovalLog::create([
             'approvable_type' => $model->getMorphClass(),
             'approvable_id'   => $model->getKey(),
