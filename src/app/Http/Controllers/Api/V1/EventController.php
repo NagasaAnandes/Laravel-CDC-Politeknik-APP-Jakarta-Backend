@@ -32,11 +32,11 @@ class EventController extends Controller
         }
 
         if ($request->filled('event_type')) {
-            $query->where('event_type', $request->string('event_type'));
+            $query->where('event_type', (string) $request->event_type);
         }
 
         if ($request->boolean('upcoming')) {
-            $query->where('registration_deadline', '>=', now());
+            $query->whereDate('registration_deadline', '>=', now());
         }
 
         $events = $query
