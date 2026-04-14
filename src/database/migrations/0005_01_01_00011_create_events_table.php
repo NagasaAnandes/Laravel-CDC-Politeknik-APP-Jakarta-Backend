@@ -13,13 +13,23 @@ return new class extends Migration
 
             $table->id();
 
-            // Ownership
+            /*
+            |--------------------------------------------------------------------------
+            | Ownership
+            |--------------------------------------------------------------------------
+            */
+
             $table->foreignId('company_id')
                 ->nullable()
                 ->constrained()
                 ->nullOnDelete();
 
-            // Core Content
+            /*
+            |--------------------------------------------------------------------------
+            | Core Content
+            |--------------------------------------------------------------------------
+            */
+
             $table->string('title', 150);
             $table->text('description');
             $table->string('event_type');
@@ -37,32 +47,62 @@ return new class extends Migration
             $table->unsignedInteger('quota')->nullable();
             $table->unsignedInteger('registrations_count')->default(0);
 
-            // Approval Workflow
+            /*
+            |--------------------------------------------------------------------------
+            | Approval Workflow
+            |--------------------------------------------------------------------------
+            */
+
             $table->string('approval_status', 20)->default('draft');
 
             $table->timestamp('submitted_at')->nullable();
 
             $table->timestamp('approved_at')->nullable();
-            $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('approved_by')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
 
             $table->timestamp('rejected_at')->nullable();
-            $table->foreignId('rejected_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('rejected_by')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
 
             $table->text('rejection_reason')->nullable();
 
             $table->timestamp('cancelled_at')->nullable();
-            $table->foreignId('cancelled_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('cancelled_by')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
 
-            // Publication
+            /*
+            |--------------------------------------------------------------------------
+            | Publication
+            |--------------------------------------------------------------------------
+            */
+
             $table->boolean('is_active')->default(false);
             $table->timestamp('published_at')->nullable();
 
-            // System
+            /*
+            |--------------------------------------------------------------------------
+            | System
+            |--------------------------------------------------------------------------
+            */
+
             $table->timestamps();
             $table->softDeletes();
+
             $table->unsignedInteger('version')->default(0);
 
-            // Indexing
+            /*
+            |--------------------------------------------------------------------------
+            | Indexing
+            |--------------------------------------------------------------------------
+            */
+
             $table->index('company_id');
             $table->index('approval_status');
 
@@ -77,47 +117,41 @@ return new class extends Migration
             $table->index(['is_active', 'registration_deadline'], 'event_active_deadline_index');
         });
 
-        // =====================
-        // CHECK CONSTRAINTS
-        // =====================
+        /*
+        |--------------------------------------------------------------------------
+        | CHECK CONSTRAINTS (SAFE VERSION ONLY)
+        |--------------------------------------------------------------------------
+        */
 
-        // Status enum
+        // ✅ ENUM STATUS ONLY (AMAN)
         DB::statement("
             ALTER TABLE events
             ADD CONSTRAINT check_events_approval_status
             CHECK (approval_status IN ('draft','submitted','approved','rejected','cancelled'))
         ");
 
-        // Approval + Rejection + Cancelled consistency
+        // ✅ REGISTRATION METHOD ENUM
         DB::statement("
             ALTER TABLE events
-            ADD CONSTRAINT check_events_approval_consistency
-            CHECK (
-                (
-                    approval_status = 'approved'
-                    AND approved_at IS NOT NULL
-                    AND rejected_at IS NULL
-                    AND cancelled_at IS NULL
-                )
-                OR
-                (
-                    approval_status = 'rejected'
-                    AND rejected_at IS NOT NULL
-                    AND approved_at IS NULL
-                    AND cancelled_at IS NULL
-                )
-                OR
-                (
-                    cancelled_at IS NOT NULL
-                )
-                OR
-                (
-                    approval_status IN ('draft','submitted')
-                )
-            )
+            ADD CONSTRAINT check_events_registration_method
+            CHECK (registration_method IN ('internal','redirect'))
         ");
 
-        // Publication consistency (lebih strict)
+        // ✅ QUOTA >= 0
+        DB::statement("
+            ALTER TABLE events
+            ADD CONSTRAINT check_events_quota
+            CHECK (quota IS NULL OR quota >= 0)
+        ");
+
+        // ✅ REGISTRATION COUNT >= 0
+        DB::statement("
+            ALTER TABLE events
+            ADD CONSTRAINT check_events_registration_count
+            CHECK (registrations_count >= 0)
+        ");
+
+        // ⚠️ OPTIONAL (AMAN, TIDAK TIMING SENSITIVE)
         DB::statement("
             ALTER TABLE events
             ADD CONSTRAINT check_events_publication
@@ -125,37 +159,6 @@ return new class extends Migration
                 (is_active = true AND published_at IS NOT NULL)
                 OR
                 (is_active = false AND published_at IS NULL)
-            )
-        ");
-
-        // Quota sanity
-        DB::statement("
-            ALTER TABLE events
-            ADD CONSTRAINT check_events_quota
-            CHECK (quota IS NULL OR quota >= 0)
-        ");
-
-        DB::statement("
-            ALTER TABLE events
-            ADD CONSTRAINT check_events_registration_count
-            CHECK (registrations_count >= 0)
-        ");
-
-        // Registration method enum
-        DB::statement("
-            ALTER TABLE events
-            ADD CONSTRAINT check_events_registration_method
-            CHECK (registration_method IN ('internal','redirect'))
-        ");
-
-        // Submitted state consistency (optional tapi bagus)
-        DB::statement("
-            ALTER TABLE events
-            ADD CONSTRAINT check_events_submitted
-            CHECK (
-                (approval_status = 'submitted' AND submitted_at IS NOT NULL)
-                OR
-                (approval_status != 'submitted')
             )
         ");
     }
