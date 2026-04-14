@@ -142,8 +142,10 @@ class EventForm
                         ->visibility('public')
                         ->nullable()
                         ->imageEditor()
+                        ->maxSize(2048)
                         ->imagePreviewHeight('250')
-                        ->helperText('Upload event poster (optional)'),
+                        ->helperText('Upload event poster (optional)')
+                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp']),
                 ]),
         ]);
     }
