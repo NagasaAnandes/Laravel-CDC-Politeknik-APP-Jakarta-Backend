@@ -13,6 +13,7 @@ return new class extends Migration
             $table->id();
 
             $table->foreignId('event_id')
+                ->nullable()
                 ->constrained()
                 ->nullOnDelete(); // ❗ jangan cascade
 
