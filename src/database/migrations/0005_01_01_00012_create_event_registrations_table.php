@@ -32,7 +32,17 @@ return new class extends Migration
             |--------------------------------------------------------------------------
             */
 
-            $table->timestamp('registered_at');
+            // ✅ Auto timestamp (hindari null & human error)
+            $table->timestamp('registered_at')->useCurrent();
+
+            /*
+            |--------------------------------------------------------------------------
+            | SOFT DELETE (OPTIONAL BUT RECOMMENDED)
+            |--------------------------------------------------------------------------
+            */
+
+            // ✅ Support cancel / re-register future
+            $table->softDeletes();
 
             /*
             |--------------------------------------------------------------------------
@@ -40,9 +50,9 @@ return new class extends Migration
             |--------------------------------------------------------------------------
             */
 
-            // Prevent duplicate registration (atomic safety)
+            // ✅ Prevent duplicate active registration
             $table->unique(
-                ['event_id', 'user_id'],
+                ['event_id', 'user_id', 'deleted_at'],
                 'event_user_unique_registration'
             );
 
@@ -52,14 +62,17 @@ return new class extends Migration
             |--------------------------------------------------------------------------
             */
 
-            // For event quota counting
+            // For event lookup
             $table->index('event_id');
 
-            // For user registration history
+            // For user history
             $table->index(['user_id', 'registered_at']);
 
-            // For reporting by time
+            // For reporting
             $table->index('registered_at');
+
+            // ✅ Optimized for event analytics & sorting
+            $table->index(['event_id', 'registered_at'], 'event_time_index');
         });
     }
 

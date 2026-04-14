@@ -9,6 +9,7 @@ use App\Models\EventLog;
 use App\Models\EventRegistration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
 
 class EventController extends Controller
 {
@@ -20,7 +21,6 @@ class EventController extends Controller
         $query = Event::published()
             ->withCount('registrations');
 
-        // SEARCH
         if ($request->filled('search')) {
             $search = $request->string('search');
 
@@ -31,12 +31,10 @@ class EventController extends Controller
             });
         }
 
-        // FILTER: event_type
         if ($request->filled('event_type')) {
             $query->where('event_type', $request->string('event_type'));
         }
 
-        // FILTER: open registration only
         if ($request->boolean('upcoming')) {
             $query->where('registration_deadline', '>=', now());
         }
@@ -73,12 +71,14 @@ class EventController extends Controller
             abort(404);
         }
 
-        EventLog::create([
-            'event_id'   => $event->id,
-            'user_id'    => optional($request->user())->id,
-            'action'     => 'view',
-            'created_at' => now(),
-        ]);
+        DB::afterCommit(function () use ($event, $request) {
+            EventLog::create([
+                'event_id'   => $event->id,
+                'user_id'    => optional($request->user())->id,
+                'action'     => 'view',
+                'created_at' => now(),
+            ]);
+        });
 
         $registrationsCount = $event->registrations()->count();
 
@@ -117,11 +117,13 @@ class EventController extends Controller
 
         if ($event->registration_method === 'redirect') {
 
-            EventLog::create([
-                'event_id' => $event->id,
-                'user_id'  => $request->user()->id,
-                'action'   => 'redirect_register',
-            ]);
+            DB::afterCommit(function () use ($event, $request) {
+                EventLog::create([
+                    'event_id' => $event->id,
+                    'user_id'  => $request->user()->id,
+                    'action'   => 'redirect_register',
+                ]);
+            });
 
             return response()->json([
                 'message'      => 'Redirect to external registration',
@@ -145,32 +147,38 @@ class EventController extends Controller
                 abort(422, 'Registration is not allowed.');
             }
 
-            if (EventRegistration::where('event_id', $locked->id)
-                ->where('user_id', $request->user()->id)
-                ->exists()
-            ) {
+            // ✅ Insert dulu (handle duplicate safely)
+            try {
+                EventRegistration::create([
+                    'event_id'      => $locked->id,
+                    'user_id'       => $request->user()->id,
+                    'registered_at' => $registeredAt,
+                ]);
+            } catch (QueryException $e) {
                 abort(409, 'Already registered.');
             }
 
+            // ✅ Atomic quota update (anti race condition)
             if ($locked->quota !== null) {
-                if ($locked->registrations_count >= $locked->quota) {
+                $updated = Event::whereKey($locked->id)
+                    ->whereColumn('registrations_count', '<', 'quota')
+                    ->update([
+                        'registrations_count' => DB::raw('registrations_count + 1'),
+                    ]);
+
+                if (! $updated) {
                     abort(422, 'Event quota is full.');
                 }
-
-                $locked->increment('registrations_count');
             }
 
-            EventRegistration::create([
-                'event_id'      => $locked->id,
-                'user_id'       => $request->user()->id,
-                'registered_at' => $registeredAt,
-            ]);
-
-            EventLog::create([
-                'event_id' => $locked->id,
-                'user_id'  => $request->user()->id,
-                'action'   => 'register',
-            ]);
+            // ✅ Logging after commit (safe)
+            DB::afterCommit(function () use ($locked, $request) {
+                EventLog::create([
+                    'event_id' => $locked->id,
+                    'user_id'  => $request->user()->id,
+                    'action'   => 'register',
+                ]);
+            });
         });
 
         return response()->json([

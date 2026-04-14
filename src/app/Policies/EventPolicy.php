@@ -139,14 +139,14 @@ class EventPolicy
     {
         return $user->isActive()
             && $user->isAdmin()
-            && $event->approval_status === ApprovalStatus::PENDING;
+            && $event->approval_status === ApprovalStatus::SUBMITTED;
     }
 
     public function reject(User $user, Event $event): bool
     {
         return $user->isActive()
             && $user->isAdmin()
-            && $event->approval_status === ApprovalStatus::PENDING;
+            && $event->approval_status === ApprovalStatus::SUBMITTED;
     }
 
     public function revert(User $user, Event $event): bool

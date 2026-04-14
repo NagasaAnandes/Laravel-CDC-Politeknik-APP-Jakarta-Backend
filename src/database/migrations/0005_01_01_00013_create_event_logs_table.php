@@ -9,28 +9,45 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('event_logs', function (Blueprint $table) {
+
             $table->id();
 
             $table->foreignId('event_id')
                 ->constrained()
-                ->cascadeOnDelete();
+                ->nullOnDelete(); // ❗ jangan cascade
 
-            // Nullable: allow guest views
             $table->foreignId('user_id')
                 ->nullable()
                 ->constrained()
                 ->nullOnDelete();
 
-            $table->string('action', 50);
-            // examples: view, register_click, redirect
+            $table->string('action', 20);
 
-            $table->timestamp('created_at');
+            // ✅ auto timestamp
+            $table->timestamp('created_at')->useCurrent();
 
-            // Indexes for analytics
+            /*
+            |--------------------------------------------------------------------------
+            | OPTIONAL ANALYTICS
+            |--------------------------------------------------------------------------
+            */
+
+            $table->string('ip_address')->nullable();
+            $table->string('user_agent')->nullable();
+
+            /*
+            |--------------------------------------------------------------------------
+            | INDEXES
+            |--------------------------------------------------------------------------
+            */
+
             $table->index('event_id');
             $table->index('user_id');
             $table->index('action');
             $table->index('created_at');
+
+            // ✅ penting untuk analytics
+            $table->index(['event_id', 'action']);
         });
     }
 

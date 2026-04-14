@@ -38,7 +38,7 @@ class EventsTable
                     ->formatStateUsing(fn(ApprovalStatus $state) => $state->label())
                     ->colors([
                         'secondary' => ApprovalStatus::DRAFT->value,
-                        'warning'   => ApprovalStatus::PENDING->value,
+                        'warning'   => ApprovalStatus::SUBMITTED->value,
                         'success'   => ApprovalStatus::APPROVED->value,
                         'danger'    => ApprovalStatus::REJECTED->value,
                     ])
@@ -51,6 +51,12 @@ class EventsTable
                 TextColumn::make('registration_deadline')
                     ->label('Deadline')
                     ->date('d M Y')
+                    ->color(
+                        fn($record) =>
+                        $record->registration_deadline < now()
+                            ? 'danger'
+                            : 'primary'
+                    )
                     ->sortable(),
 
                 TextColumn::make('quota')
@@ -73,11 +79,14 @@ class EventsTable
                         return "{$record->registrations_count} / {$state}";
                     })
                     ->colors([
-                        'secondary' => fn($record) => $record->registration_method !== 'internal',
-                        'success'   => fn($record) =>
+                        'secondary' => fn($record) =>
+                        $record->registration_method !== 'internal',
+
+                        'success' => fn($record) =>
                         $record->quota !== null &&
                             $record->registrations_count < $record->quota,
-                        'danger'    => fn($record) =>
+
+                        'danger' => fn($record) =>
                         $record->quota !== null &&
                             $record->registrations_count >= $record->quota,
                     ]),
@@ -91,25 +100,57 @@ class EventsTable
                     ->trueColor('success')
                     ->falseColor('danger'),
             ])
+
             ->filters([
                 SelectFilter::make('approval_status')
                     ->options([
-                        ApprovalStatus::DRAFT->value    => 'Draft',
-                        ApprovalStatus::PENDING->value  => 'Pending',
-                        ApprovalStatus::APPROVED->value => 'Approved',
-                        ApprovalStatus::REJECTED->value => 'Rejected',
+                        ApprovalStatus::DRAFT->value     => 'Draft',
+                        ApprovalStatus::SUBMITTED->value => 'Submitted',
+                        ApprovalStatus::APPROVED->value  => 'Approved',
+                        ApprovalStatus::REJECTED->value  => 'Rejected',
                     ]),
             ])
+
             ->recordActions([
 
                 EditAction::make(),
 
+                /*
+                |--------------------------------------------------------------------------
+                | SUBMIT
+                |--------------------------------------------------------------------------
+                */
+
+                Action::make('submit')
+                    ->label('Submit Event')
+                    ->color('info')
+                    ->icon('heroicon-o-paper-airplane')
+                    ->visible(
+                        fn($record) =>
+                        $record->approval_status === ApprovalStatus::DRAFT
+                    )
+                    ->requiresConfirmation()
+                    ->action(function ($record) {
+                        app(ApprovalService::class)->submit(
+                            model: $record,
+                            actor: Auth::user(),
+                            rules: app(EventApprovalRules::class)
+                        );
+                    }),
+
+                /*
+                |--------------------------------------------------------------------------
+                | APPROVE
+                |--------------------------------------------------------------------------
+                */
+
                 Action::make('approve')
+                    ->label('Approve Event')
                     ->color('success')
                     ->icon('heroicon-o-check')
                     ->visible(
                         fn($record) =>
-                        $record->approval_status === ApprovalStatus::PENDING
+                        $record->approval_status === ApprovalStatus::SUBMITTED
                     )
                     ->requiresConfirmation()
                     ->action(function ($record) {
@@ -120,17 +161,25 @@ class EventsTable
                         );
                     }),
 
+                /*
+                |--------------------------------------------------------------------------
+                | REJECT
+                |--------------------------------------------------------------------------
+                */
+
                 Action::make('reject')
+                    ->label('Reject Event')
                     ->color('danger')
                     ->icon('heroicon-o-x-mark')
                     ->visible(
                         fn($record) =>
-                        $record->approval_status === ApprovalStatus::PENDING
+                        $record->approval_status === ApprovalStatus::SUBMITTED
                     )
-                    ->form([
+                    ->schema([
                         \Filament\Forms\Components\Textarea::make('reason')
                             ->required()
-                            ->maxLength(1000),
+                            ->maxLength(1000)
+                            ->placeholder('Explain why this event is rejected...'),
                     ])
                     ->action(function ($record, array $data) {
                         app(ApprovalService::class)->reject(
@@ -141,7 +190,14 @@ class EventsTable
                         );
                     }),
 
+                /*
+                |--------------------------------------------------------------------------
+                | REVERT
+                |--------------------------------------------------------------------------
+                */
+
                 Action::make('revert')
+                    ->label('Revert to Draft')
                     ->color('warning')
                     ->icon('heroicon-o-arrow-uturn-left')
                     ->visible(
@@ -157,6 +213,12 @@ class EventsTable
                         );
                     }),
 
+                /*
+                |--------------------------------------------------------------------------
+                | DELETE
+                |--------------------------------------------------------------------------
+                */
+
                 DeleteAction::make()
                     ->visible(
                         fn($record) =>
@@ -164,6 +226,7 @@ class EventsTable
                             && $record->registrations_count === 0
                     ),
             ])
+
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
@@ -177,6 +240,7 @@ class EventsTable
                         ),
                 ]),
             ])
+
             ->defaultSort('registration_deadline', 'desc');
     }
 }

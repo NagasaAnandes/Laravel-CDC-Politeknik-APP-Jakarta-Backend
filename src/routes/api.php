@@ -12,70 +12,74 @@ Route::prefix('v1')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Public Endpoints (Throttle Protected)
+    | Public Endpoints
     |--------------------------------------------------------------------------
     */
 
     Route::middleware('throttle:120,1')->group(function () {
 
-        // ANNOUNCEMENTS
-        Route::get('announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
-        Route::get('announcements/{id}', [AnnouncementController::class, 'show'])->name('announcements.show');
+        Route::get('announcements', [AnnouncementController::class, 'index']);
+        Route::get('announcements/{id}', [AnnouncementController::class, 'show'])
+            ->whereNumber('id');
 
-        // JOBS
-        Route::get('jobs', [JobController::class, 'index'])->name('jobs.index');
-        Route::get('jobs/{job}', [JobController::class, 'show'])->name('jobs.show');
+        Route::get('jobs', [JobController::class, 'index']);
+        Route::get('jobs/{job}', [JobController::class, 'show'])
+            ->whereNumber('job');
 
-        // EVENTS
-        Route::get('events', [EventController::class, 'index'])->name('events.index');
-        Route::get('events/{event}', [EventController::class, 'show'])->name('events.show');
+        Route::get('events', [EventController::class, 'index']);
+        Route::get('events/{event}', [EventController::class, 'show'])
+            ->whereNumber('event');
     });
 
     /*
     |--------------------------------------------------------------------------
-    | Authentication
+    | Auth
     |--------------------------------------------------------------------------
     */
 
     Route::post('auth/login', [AuthController::class, 'login'])
-        ->middleware('throttle:10,1');
+        ->middleware('throttle:5,1');
 
     /*
     |--------------------------------------------------------------------------
-    | Authenticated Routes
+    | Protected
     |--------------------------------------------------------------------------
     */
 
-    Route::middleware(['auth:sanctum'])->group(function () {
+    Route::middleware('auth:sanctum')->group(function () {
 
-        Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
-        Route::get('me', [AuthController::class, 'me'])->name('auth.me');
+        Route::post('auth/logout', [AuthController::class, 'logout']);
+        Route::get('me', [AuthController::class, 'me']);
 
-        // PROFILE
-        Route::get('profile', [ProfileController::class, 'show'])->name('profile.show');
+        Route::get('profile', [ProfileController::class, 'show']);
         Route::put('profile', [ProfileController::class, 'update'])
-            ->middleware('throttle:30,1')
-            ->name('profile.update');
+            ->middleware('throttle:30,1');
 
-        // JOB APPLY
         Route::post('jobs/{job}/apply', [JobController::class, 'apply'])
-            ->middleware('throttle:60,1')
-            ->name('jobs.apply');
+            ->whereNumber('job')
+            ->middleware('throttle:60,1');
 
-        // EVENT REGISTER
+        /*
+        |--------------------------------------------------------------------------
+        | EVENTS (FIXED ORDER)
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('events/my', [EventController::class, 'myEvents']);
+
         Route::post('events/{event}/register', [EventController::class, 'register'])
-            ->middleware('throttle:30,1')
-            ->name('events.register');
+            ->whereNumber('event')
+            ->middleware('throttle:10,1');
 
-        Route::get('events/my', [EventController::class, 'myEvents'])
-            ->name('events.mine');
+        /*
+        |--------------------------------------------------------------------------
+        | TRACER
+        |--------------------------------------------------------------------------
+        */
 
-        // TRACER STUDY
-        Route::get('tracer/survey', [TracerSurveyController::class, 'survey'])
-            ->name('tracer.survey');
+        Route::get('tracer/survey', [TracerSurveyController::class, 'survey']);
 
         Route::post('tracer/submit', [TracerSurveyController::class, 'submit'])
-            ->middleware('throttle:30,1')
-            ->name('tracer.submit');
+            ->middleware('throttle:30,1');
     });
 });

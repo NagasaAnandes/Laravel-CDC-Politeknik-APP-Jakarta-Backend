@@ -7,7 +7,6 @@ use App\Enums\ApprovalStatus;
 use App\Models\Event;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Auth\Access\AuthorizationException;
 use LogicException;
 
 class EventApprovalRules implements ApprovalRules
@@ -23,7 +22,7 @@ class EventApprovalRules implements ApprovalRules
         /** @var Event $model */
 
         if ($actor->isAdmin()) {
-            return true;
+            return true; // admin boleh create & submit
         }
 
         return $actor->isActive()
@@ -43,7 +42,6 @@ class EventApprovalRules implements ApprovalRules
 
     public function canRevert(Model $model, User $actor): bool
     {
-        // Only admin allowed to revert approved event
         return $actor->isActive() && $actor->isAdmin();
     }
 
@@ -62,7 +60,12 @@ class EventApprovalRules implements ApprovalRules
 
         /** @var Event $model */
 
-        if ($to === ApprovalStatus::PENDING) {
+        // 🔒 Defensive: validasi enum domain (walau sudah ada DB constraint)
+        if (! in_array($model->registration_method, ['internal', 'redirect'], true)) {
+            throw new LogicException('Invalid registration method.');
+        }
+
+        if ($to === ApprovalStatus::SUBMITTED) {
 
             if (! $model->title || ! $model->description) {
                 throw new LogicException('Event content incomplete.');
@@ -75,12 +78,22 @@ class EventApprovalRules implements ApprovalRules
             if ($model->registration_method === 'redirect' && ! $model->registration_url) {
                 throw new LogicException('Redirect event must have registration URL.');
             }
+
+            if ($model->registration_method === 'internal' && $model->registration_url) {
+                throw new LogicException('Internal event should not have registration URL.');
+            }
         }
 
         if ($to === ApprovalStatus::APPROVED) {
 
-            if ($model->registration_deadline?->isPast()) {
-                throw new LogicException('Cannot approve event with past registration deadline.');
+            // 🔴 Pastikan tidak expired
+            if ($model->registration_deadline <= now()) {
+                throw new LogicException('Cannot approve expired event.');
+            }
+
+            // 🔒 Re-check data (prevent tampering setelah submit)
+            if (! $model->title || ! $model->description) {
+                throw new LogicException('Event data corrupted before approval.');
             }
         }
     }
@@ -95,11 +108,22 @@ class EventApprovalRules implements ApprovalRules
     {
         /** @var Event $model */
 
+        // idempotency safety (optional)
+        if ($model->approval_status === ApprovalStatus::SUBMITTED) {
+            return;
+        }
+
         $model->submitted_at = now();
+
+        $model->approved_at = null;
+        $model->approved_by = null;
 
         $model->rejected_at = null;
         $model->rejected_by = null;
         $model->rejection_reason = null;
+
+        $model->cancelled_at = null;
+        $model->cancelled_by = null;
 
         $model->is_active = false;
     }
@@ -111,6 +135,13 @@ class EventApprovalRules implements ApprovalRules
         $model->approved_at = now();
         $model->approved_by = $actor->getKey();
 
+        $model->rejected_at = null;
+        $model->rejected_by = null;
+        $model->rejection_reason = null;
+
+        $model->cancelled_at = null;
+        $model->cancelled_by = null;
+
         $this->autoPublish($model);
     }
 
@@ -121,6 +152,9 @@ class EventApprovalRules implements ApprovalRules
         $model->rejected_at = now();
         $model->rejected_by = $actor->getKey();
         $model->rejection_reason = $reason;
+
+        $model->approved_at = null;
+        $model->approved_by = null;
 
         $model->is_active = false;
     }
@@ -137,6 +171,9 @@ class EventApprovalRules implements ApprovalRules
         $model->rejected_at = null;
         $model->rejected_by = null;
         $model->rejection_reason = null;
+
+        $model->cancelled_at = null;
+        $model->cancelled_by = null;
 
         $model->is_active = false;
         $model->published_at = null;

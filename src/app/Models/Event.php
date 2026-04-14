@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Auth;
 
 class Event extends Model
 {
@@ -88,16 +87,8 @@ class Event extends Model
     protected static function booted()
     {
         static::creating(function ($model) {
-
-            $user = Auth::user();
-
-            if (! $user) {
-                return;
-            }
-
-            if ($user->role?->isCompany()) {
-                $model->company_id = $user->company_id;
-            }
+            // ❌ HAPUS Auth::user() dependency (anti-pattern)
+            // 👉 company_id harus di-set dari service/controller
         });
 
         static::updating(function ($model) {
@@ -106,6 +97,7 @@ class Event extends Model
                 return;
             }
 
+            // 🔒 Workflow protection
             if (
                 $model->isDirty('approval_status') ||
                 $model->isDirty('submitted_at') ||
@@ -122,6 +114,7 @@ class Event extends Model
                 );
             }
 
+            // 🔒 Publication protection
             if (
                 $model->isDirty('is_active') ||
                 $model->isDirty('published_at')
@@ -131,6 +124,7 @@ class Event extends Model
                 );
             }
 
+            // 🔒 Ownership lock
             if (
                 $model->isDirty('company_id') &&
                 $model->getOriginal('company_id') !== null
@@ -175,7 +169,9 @@ class Event extends Model
 
     public function registrations()
     {
-        return $this->hasMany(EventRegistration::class);
+        // ✅ FIX: exclude soft deleted registrations
+        return $this->hasMany(EventRegistration::class)
+            ->whereNull('deleted_at');
     }
 
     /*
@@ -194,9 +190,9 @@ class Event extends Model
         return $this->approval_status === ApprovalStatus::REJECTED;
     }
 
-    public function isPending(): bool
+    public function isSubmitted(): bool
     {
-        return $this->approval_status === ApprovalStatus::PENDING;
+        return $this->approval_status === ApprovalStatus::SUBMITTED;
     }
 
     public function isDraft(): bool
@@ -252,6 +248,7 @@ class Event extends Model
     | Registration & Quota
     |--------------------------------------------------------------------------
     */
+
     public function isRegistrationOpen(): bool
     {
         return ! $this->isRegistrationClosed();
