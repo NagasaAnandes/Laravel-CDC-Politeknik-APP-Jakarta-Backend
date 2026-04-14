@@ -22,7 +22,7 @@ class EventApprovalRules implements ApprovalRules
         /** @var Event $model */
 
         if ($actor->isAdmin()) {
-            return true; // admin boleh create & submit
+            return true;
         }
 
         return $actor->isActive()
@@ -42,7 +42,12 @@ class EventApprovalRules implements ApprovalRules
 
     public function canRevert(Model $model, User $actor): bool
     {
-        return $actor->isActive() && $actor->isAdmin();
+        /** @var Event $model */
+
+        return $actor->isActive()
+            && $actor->isAdmin()
+            && $model->approval_status === ApprovalStatus::APPROVED
+            && $model->registrations_count === 0; // 🔒 guard utama
     }
 
     /*
@@ -60,10 +65,21 @@ class EventApprovalRules implements ApprovalRules
 
         /** @var Event $model */
 
-        // 🔒 Defensive: validasi enum domain (walau sudah ada DB constraint)
+        /*
+        |--------------------------------------------------------------------------
+        | BASIC SANITY CHECK
+        |--------------------------------------------------------------------------
+        */
+
         if (! in_array($model->registration_method, ['internal', 'redirect'], true)) {
             throw new LogicException('Invalid registration method.');
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | SUBMIT VALIDATION
+        |--------------------------------------------------------------------------
+        */
 
         if ($to === ApprovalStatus::SUBMITTED) {
 
@@ -84,16 +100,39 @@ class EventApprovalRules implements ApprovalRules
             }
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | APPROVE VALIDATION
+        |--------------------------------------------------------------------------
+        */
+
         if ($to === ApprovalStatus::APPROVED) {
 
-            // 🔴 Pastikan tidak expired
             if ($model->registration_deadline <= now()) {
                 throw new LogicException('Cannot approve expired event.');
             }
 
-            // 🔒 Re-check data (prevent tampering setelah submit)
             if (! $model->title || ! $model->description) {
                 throw new LogicException('Event data corrupted before approval.');
+            }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | REVERT VALIDATION (CRITICAL)
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            $from === ApprovalStatus::APPROVED &&
+            $to === ApprovalStatus::DRAFT
+        ) {
+            if ($model->registrations_count > 0) {
+                throw new LogicException('Cannot revert event with existing registrations.');
+            }
+
+            if ($model->registration_deadline <= now()) {
+                throw new LogicException('Cannot revert expired event.');
             }
         }
     }
@@ -108,9 +147,8 @@ class EventApprovalRules implements ApprovalRules
     {
         /** @var Event $model */
 
-        // idempotency safety (optional)
         if ($model->approval_status === ApprovalStatus::SUBMITTED) {
-            return;
+            return; // idempotent
         }
 
         $model->submitted_at = now();
@@ -126,6 +164,7 @@ class EventApprovalRules implements ApprovalRules
         $model->cancelled_by = null;
 
         $model->is_active = false;
+        $model->published_at = null;
     }
 
     public function onApprove(Model $model, User $actor): void
@@ -157,6 +196,7 @@ class EventApprovalRules implements ApprovalRules
         $model->approved_by = null;
 
         $model->is_active = false;
+        $model->published_at = null;
     }
 
     public function onRevert(Model $model, User $actor): void
