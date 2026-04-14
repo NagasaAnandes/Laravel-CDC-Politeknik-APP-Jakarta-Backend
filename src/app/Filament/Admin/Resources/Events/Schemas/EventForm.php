@@ -119,8 +119,8 @@ class EventForm
                         ->required(fn($get) => $get('registration_method') === 'redirect'),
 
                     Forms\Components\TextInput::make('quota')
-                        ->numeric()
-                        ->rule('nullable|integer|min:1')
+                        ->integer()
+                        ->minValue(1)
                         ->nullable()
                         ->helperText('Leave empty for unlimited participants')
                         ->visible(fn($get) => $get('registration_method') === 'internal'),
