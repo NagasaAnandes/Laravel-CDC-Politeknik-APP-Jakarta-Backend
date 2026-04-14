@@ -10,7 +10,7 @@ interface ApprovalRules
 {
     /*
     |--------------------------------------------------------------------------
-    | Authorization Layer (Explicit Boolean Contract)
+    | Authorization Layer
     |--------------------------------------------------------------------------
     */
 
@@ -26,12 +26,12 @@ interface ApprovalRules
 
     public function canRevert(Model $model, User $actor): bool;
 
+    public function canCancel(Model $model, User $actor): bool;
+
     /*
     |--------------------------------------------------------------------------
     | Domain Invariant Validation
     |--------------------------------------------------------------------------
-    | Called before transition is applied.
-    | Throw exception if invalid.
     */
 
     public function validateTransition(
@@ -58,4 +58,6 @@ interface ApprovalRules
     ): void;
 
     public function onRevert(Model $model, User $actor): void;
+
+    public function onCancel(Model $model, User $actor): void;
 }

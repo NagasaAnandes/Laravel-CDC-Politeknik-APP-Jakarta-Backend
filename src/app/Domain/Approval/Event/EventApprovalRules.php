@@ -47,7 +47,12 @@ class EventApprovalRules implements ApprovalRules
         return $actor->isActive()
             && $actor->isAdmin()
             && $model->approval_status === ApprovalStatus::APPROVED
-            && $model->registrations_count === 0; // 🔒 guard utama
+            && $model->registrations_count === 0;
+    }
+
+    public function canCancel(Model $model, User $actor): bool
+    {
+        return $actor->isActive() && $actor->isAdmin();
     }
 
     /*
@@ -73,6 +78,16 @@ class EventApprovalRules implements ApprovalRules
 
         if (! in_array($model->registration_method, ['internal', 'redirect'], true)) {
             throw new LogicException('Invalid registration method.');
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | TERMINAL STATE PROTECTION
+        |--------------------------------------------------------------------------
+        */
+
+        if ($from === ApprovalStatus::CANCELLED) {
+            throw new LogicException('Cannot transition cancelled event.');
         }
 
         /*
@@ -119,7 +134,7 @@ class EventApprovalRules implements ApprovalRules
 
         /*
         |--------------------------------------------------------------------------
-        | REVERT VALIDATION (CRITICAL)
+        | REVERT VALIDATION
         |--------------------------------------------------------------------------
         */
 
@@ -135,6 +150,19 @@ class EventApprovalRules implements ApprovalRules
                 throw new LogicException('Cannot revert expired event.');
             }
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | CANCEL VALIDATION
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            $from === ApprovalStatus::APPROVED &&
+            $to === ApprovalStatus::CANCELLED
+        ) {
+            // ✅ Cancel always allowed
+        }
     }
 
     /*
@@ -148,7 +176,7 @@ class EventApprovalRules implements ApprovalRules
         /** @var Event $model */
 
         if ($model->approval_status === ApprovalStatus::SUBMITTED) {
-            return; // idempotent
+            return;
         }
 
         $model->submitted_at = now();
@@ -214,6 +242,20 @@ class EventApprovalRules implements ApprovalRules
 
         $model->cancelled_at = null;
         $model->cancelled_by = null;
+
+        $model->is_active = false;
+        $model->published_at = null;
+    }
+
+    public function onCancel(Model $model, User $actor): void
+    {
+        /** @var Event $model */
+
+        $model->cancelled_at = now();
+        $model->cancelled_by = $actor->getKey();
+
+        $model->approved_at = null;
+        $model->approved_by = null;
 
         $model->is_active = false;
         $model->published_at = null;

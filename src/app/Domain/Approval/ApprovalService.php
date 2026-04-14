@@ -13,9 +13,6 @@ use Illuminate\Support\Facades\DB;
 
 class ApprovalService
 {
-    /**
-     * Explicit transition matrix (FINAL)
-     */
     protected array $transitions = [
         ApprovalStatus::DRAFT->value => [
             ApprovalStatus::SUBMITTED->value,
@@ -31,7 +28,8 @@ class ApprovalService
         ],
 
         ApprovalStatus::APPROVED->value => [
-            ApprovalStatus::DRAFT->value, // ✅ FIX: allow revert
+            ApprovalStatus::DRAFT->value,      // revert
+            ApprovalStatus::CANCELLED->value,  // ✅ FIX: cancel
         ],
     ];
 
@@ -54,6 +52,11 @@ class ApprovalService
     public function revert(Model $model, User $actor, ApprovalRules $rules): Model
     {
         return $this->transition($model, $actor, ApprovalStatus::DRAFT, 'revert', $rules);
+    }
+
+    public function cancel(Model $model, User $actor, ApprovalRules $rules): Model
+    {
+        return $this->transition($model, $actor, ApprovalStatus::CANCELLED, 'cancel', $rules);
     }
 
     public function reject(
@@ -94,12 +97,12 @@ class ApprovalService
                 throw new \LogicException('approval_status must be casted to ApprovalStatus enum.');
             }
 
-            // 🛑 Idempotency
+            // ✅ Idempotent
             if ($from === $to) {
                 return $model;
             }
 
-            // ❌ Transition guard (ENGINE LEVEL)
+            // ❌ Engine-level transition guard
             if (! $this->canTransition($from, $to)) {
                 throw new InvalidTransitionException(
                     "Invalid transition from {$from->value} to {$to->value}"
@@ -111,19 +114,12 @@ class ApprovalService
                 throw new AuthorizationException("Unauthorized action: {$action}");
             }
 
-            // 🧠 Domain rules (IMPORTANT)
+            // 🧠 Domain rules
             $rules->validateTransition($model, $actor, $from, $to);
 
-            // 🔓 bypass guard (if model protected)
             if (method_exists($model, 'bypassWorkflowGuard')) {
                 $model->bypassWorkflowGuard();
             }
-
-            /*
-            |--------------------------------------------------------------------------
-            | APPLY STATE
-            |--------------------------------------------------------------------------
-            */
 
             $originalVersion = $model->version;
 
@@ -134,6 +130,7 @@ class ApprovalService
                 'approve' => $rules->onApprove($model, $actor),
                 'reject'  => $rules->onReject($model, $actor, $reason),
                 'revert'  => $rules->onRevert($model, $actor),
+                'cancel'  => $rules->onCancel($model, $actor),
                 default   => throw new \LogicException("Unknown action: {$action}")
             };
 
@@ -151,12 +148,6 @@ class ApprovalService
             }
 
             $model->refresh();
-
-            /*
-            |--------------------------------------------------------------------------
-            | LOGGING
-            |--------------------------------------------------------------------------
-            */
 
             DB::afterCommit(function () use ($model, $from, $to, $action, $actor, $reason) {
                 $this->log($model, $from, $to, $action, $actor, $reason);
@@ -201,6 +192,7 @@ class ApprovalService
             'approve' => $rules->canApprove($model, $actor),
             'reject'  => $rules->canReject($model, $actor, $reason),
             'revert'  => $rules->canRevert($model, $actor),
+            'cancel'  => $rules->canCancel($model, $actor), // ✅ FIX
             default   => false,
         };
     }
