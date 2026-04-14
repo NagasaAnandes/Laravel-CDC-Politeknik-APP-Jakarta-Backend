@@ -11,5 +11,4 @@ Artisan::command('inspire', function () {
 // 🔥 SCHEDULER EXPIRE EVENT
 Schedule::command('events:expire')
     ->everyMinute()
-    ->withoutOverlapping()
-    ->onOneServer();
+    ->withoutOverlapping();
