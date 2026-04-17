@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable implements FilamentUser
 {
@@ -87,14 +88,38 @@ class User extends Authenticatable implements FilamentUser
     /**
      * Check if user is admin (super_admin or admin_cdc).
      */
+
+    public function isAdmin(): bool
+    {
+        return $this->role?->isAdmin() === true;
+    }
+
+    public function isStudentOrAlumni(): bool
+    {
+        return in_array($this->role, [
+            UserRole::STUDENT,
+            UserRole::ALUMNI,
+        ]);
+    }
+
     public function company()
     {
         return $this->belongsTo(Company::class);
     }
 
-    public function isAdmin(): bool
+    public function experiences(): HasMany
     {
-        return $this->role?->isAdmin() === true;
+        return $this->hasMany(Experience::class);
+    }
+
+    public function educations(): HasMany
+    {
+        return $this->hasMany(Education::class);
+    }
+
+    public function certificates(): HasMany
+    {
+        return $this->hasMany(Certificate::class);
     }
 
     /**
@@ -112,5 +137,29 @@ class User extends Authenticatable implements FilamentUser
             'partner' => $this->isActive() && $this->role === UserRole::COMPANY,
             default => false,
         };
+    }
+
+    /**
+     * Determine if user can access another user's profile.
+     *
+     * NOTE:
+     * - Currently owner + admin only (MVP mode)
+     * - Company access will be added after job_applications is implemented
+     */
+    public function canAccessUserProfile(int $targetUserId): bool
+    {
+        // Owner
+        if ($this->id === $targetUserId) {
+            return true;
+        }
+
+        // Admin
+        if ($this->isAdmin() && $this->isActive()) {
+            return true;
+        }
+
+        // Company (Controlled Access)
+
+        return false;
     }
 }

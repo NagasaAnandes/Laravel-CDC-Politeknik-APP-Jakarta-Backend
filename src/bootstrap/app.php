@@ -5,7 +5,8 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Console\Scheduling\Schedule;
 use Symfony\Component\HttpFoundation\Request;
-// use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use App\Support\ApiResponse;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -24,7 +25,33 @@ return Application::configure(basePath: dirname(__DIR__))
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+
+        // Validation
+        $exceptions->render(function (ValidationException $e, $request) {
+            return ApiResponse::validation($e->errors());
+        });
+
+        // Model Not Found (findOrFail)
+        $exceptions->render(function (\Illuminate\Database\Eloquent\ModelNotFoundException $e, $request) {
+            return ApiResponse::notFound('Resource not found');
+        });
+
+        // Authorization (Policy)
+        $exceptions->render(function (\Illuminate\Auth\Access\AuthorizationException $e, $request) {
+            return ApiResponse::forbidden('You are not allowed to perform this action');
+        });
+
+        // Fallback (optional but recommended)
+        $exceptions->render(function (\Throwable $e, $request) {
+            if (config('app.debug')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 500);
+            }
+
+            return ApiResponse::error('Server error', 500);
+        });
     })
     ->withSchedule(function (Schedule $schedule): void {
         $schedule

@@ -4,18 +4,32 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\UpdateProfileRequest;
+use App\Models\Experience;
+use App\Models\Education;
+use App\Models\Certificate;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use App\Support\ApiResponse;
+use App\Domain\CareerProfile\Services\ExperienceService;
+use App\Domain\CareerProfile\Services\CertificateService;
+use App\Http\Requests\Api\V1\Profile\StoreExperienceRequest;
+use App\Http\Requests\Api\V1\Profile\UpdateExperienceRequest;
+use App\Http\Requests\Api\V1\Profile\StoreEducationRequest;
+use App\Http\Requests\Api\V1\Profile\StoreCertificateRequest;
 
 class ProfileController extends Controller
 {
-    /**
-     * Return authenticated user's profile.
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | PROFILE
+    |--------------------------------------------------------------------------
+    */
+
     public function show(Request $request)
     {
         $user = $request->user();
 
-        return response()->json([
+        return ApiResponse::success([
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
@@ -29,39 +43,135 @@ class ProfileController extends Controller
         ]);
     }
 
-    /**
-     * Update authenticated user's profile (whitelisted fields only).
-     */
     public function update(UpdateProfileRequest $request)
     {
-        $user = $request->user();
+        $request->user()->update($request->validated());
 
-        $allowed = [
-            'name',
-            'phone',
-            'linkedin_url',
-            'graduation_year',
-            'program_study',
-        ];
-
-        $user->fill(
-            array_intersect_key(
-                $request->validated(),
-                array_flip($allowed)
-            )
+        return ApiResponse::success(
+            null,
+            'Profile updated successfully'
         );
+    }
 
-        $user->save();
+    /*
+    |--------------------------------------------------------------------------
+    | EXPERIENCE
+    |--------------------------------------------------------------------------
+    */
 
-        return response()->json([
-            'message' => 'Profile updated successfully',
-            'profile' => [
-                'name' => $user->name,
-                'phone' => $user->phone,
-                'linkedin_url' => $user->linkedin_url,
-                'graduation_year' => $user->graduation_year,
-                'program_study' => $user->program_study,
-            ],
-        ]);
+    public function experiences(Request $request)
+    {
+        $this->authorize('viewAny', Experience::class);
+
+        $data = Experience::where('user_id', $request->user()->id)
+            ->latest()
+            ->paginate(10);
+
+        return ApiResponse::success($data);
+    }
+
+    public function storeExperience(
+        StoreExperienceRequest $request,
+        ExperienceService $service
+    ) {
+        $data = $request->validated();
+    }
+
+    public function updateExperience(
+        UpdateExperienceRequest $request,
+        $id,
+        ExperienceService $service
+    ) {
+        $data = $request->validated();
+    }
+
+    public function deleteExperience($id)
+    {
+        $experience = Experience::findOrFail($id);
+
+        $this->authorize('delete', $experience);
+
+        $experience->delete();
+
+        return ApiResponse::success(
+            null,
+            'Experience deleted successfully'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | EDUCATION
+    |--------------------------------------------------------------------------
+    */
+
+    public function educations(Request $request)
+    {
+        $this->authorize('viewAny', Education::class);
+
+        $data = Education::where('user_id', $request->user()->id)
+            ->latest()
+            ->paginate(10);
+
+        return ApiResponse::success($data);
+    }
+
+    public function storeEducation(StoreEducationRequest $request)
+    {
+        $data = $request->validated();
+    }
+
+    public function deleteEducation($id)
+    {
+        $education = Education::findOrFail($id);
+
+        $this->authorize('delete', $education);
+
+        $education->delete();
+
+        return ApiResponse::success(
+            null,
+            'Education deleted successfully'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CERTIFICATE
+    |--------------------------------------------------------------------------
+    */
+
+    public function storeCertificate(
+        StoreCertificateRequest $request,
+        CertificateService $service
+    ) {
+        $data = $request->validated();
+    }
+
+    public function downloadCertificate($id)
+    {
+        $certificate = Certificate::findOrFail($id);
+
+        $this->authorize('download', $certificate);
+
+        if (!Storage::exists($certificate->file_path)) {
+            return ApiResponse::notFound('File not found');
+        }
+
+        return Storage::download($certificate->file_path);
+    }
+
+    public function deleteCertificate($id, CertificateService $service)
+    {
+        $certificate = Certificate::findOrFail($id);
+
+        $this->authorize('delete', $certificate);
+
+        $service->delete($certificate);
+
+        return ApiResponse::success(
+            null,
+            'Certificate deleted successfully'
+        );
     }
 }
