@@ -74,7 +74,18 @@ class ProfileController extends Controller
         StoreExperienceRequest $request,
         ExperienceService $service
     ) {
+        $this->authorize('create', Experience::class);
+
         $data = $request->validated();
+        $data['user_id'] = $request->user()->id;
+
+        $experience = $service->create($data);
+
+        return ApiResponse::success(
+            $experience,
+            'Experience created successfully',
+            201
+        );
     }
 
     public function updateExperience(
@@ -82,7 +93,18 @@ class ProfileController extends Controller
         $id,
         ExperienceService $service
     ) {
+        $experience = Experience::findOrFail($id);
+
+        $this->authorize('update', $experience);
+
         $data = $request->validated();
+
+        $experience = $service->update($experience, $data);
+
+        return ApiResponse::success(
+            $experience,
+            'Experience updated successfully'
+        );
     }
 
     public function deleteExperience($id)
@@ -118,7 +140,18 @@ class ProfileController extends Controller
 
     public function storeEducation(StoreEducationRequest $request)
     {
+        $this->authorize('create', Education::class);
+
         $data = $request->validated();
+        $data['user_id'] = $request->user()->id;
+
+        $education = Education::create($data);
+
+        return ApiResponse::success(
+            $education,
+            'Education created successfully',
+            201
+        );
     }
 
     public function deleteEducation($id)
@@ -145,7 +178,21 @@ class ProfileController extends Controller
         StoreCertificateRequest $request,
         CertificateService $service
     ) {
+        $this->authorize('create', Certificate::class);
+
         $data = $request->validated();
+
+        $certificate = $service->store(
+            $request->user(),
+            $data,
+            $request->file('file')
+        );
+
+        return ApiResponse::success(
+            $certificate,
+            'Certificate uploaded successfully',
+            201
+        );
     }
 
     public function downloadCertificate($id)
