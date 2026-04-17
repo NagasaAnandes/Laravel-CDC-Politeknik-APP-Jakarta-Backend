@@ -24,27 +24,39 @@ return Application::configure(basePath: dirname(__DIR__))
                 | Request::HEADER_X_FORWARDED_PROTO
         );
     })
+
     ->withExceptions(function (Exceptions $exceptions): void {
 
         // Validation
         $exceptions->render(function (ValidationException $e, $request) {
-            return ApiResponse::validation($e->errors());
+            if ($request->is('api/*')) {
+                return ApiResponse::validation($e->errors());
+            }
+
+            return null;
         });
 
         // Model Not Found
         $exceptions->render(function (\Illuminate\Database\Eloquent\ModelNotFoundException $e, $request) {
-            return ApiResponse::notFound('Resource not found');
+            if ($request->is('api/*')) {
+                return ApiResponse::notFound('Resource not found');
+            }
+
+            return null;
         });
 
         // Authorization
         $exceptions->render(function (\Illuminate\Auth\Access\AuthorizationException $e, $request) {
-            return ApiResponse::forbidden('You are not allowed to perform this action');
+            if ($request->is('api/*')) {
+                return ApiResponse::forbidden('You are not allowed to perform this action');
+            }
+
+            return null;
         });
 
-        // Fallback (DEBUG + PROD)
+        // Fallback
         $exceptions->render(function (\Throwable $e, $request) {
 
-            // ✅ HANYA untuk API
             if ($request->is('api/*')) {
 
                 if (config('app.debug')) {
@@ -59,10 +71,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::error('Server error', 500);
             }
 
-            // ✅ selain API → default Laravel (Filament butuh ini)
             return null;
         });
     })
+
     ->withSchedule(function (Schedule $schedule): void {
         $schedule
             ->command('jobs:deactivate-expired')
