@@ -44,16 +44,23 @@ return Application::configure(basePath: dirname(__DIR__))
         // Fallback (DEBUG + PROD)
         $exceptions->render(function (\Throwable $e, $request) {
 
-            if (config('app.debug')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                ], 500);
+            // ✅ HANYA untuk API
+            if ($request->is('api/*')) {
+
+                if (config('app.debug')) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $e->getMessage(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                    ], 500);
+                }
+
+                return ApiResponse::error('Server error', 500);
             }
 
-            return ApiResponse::error('Server error', 500);
+            // ✅ selain API → default Laravel (Filament butuh ini)
+            return null;
         });
     })
     ->withSchedule(function (Schedule $schedule): void {
