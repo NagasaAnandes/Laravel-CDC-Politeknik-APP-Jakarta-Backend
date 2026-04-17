@@ -31,22 +31,25 @@ return Application::configure(basePath: dirname(__DIR__))
             return ApiResponse::validation($e->errors());
         });
 
-        // Model Not Found (findOrFail)
+        // Model Not Found
         $exceptions->render(function (\Illuminate\Database\Eloquent\ModelNotFoundException $e, $request) {
             return ApiResponse::notFound('Resource not found');
         });
 
-        // Authorization (Policy)
+        // Authorization
         $exceptions->render(function (\Illuminate\Auth\Access\AuthorizationException $e, $request) {
             return ApiResponse::forbidden('You are not allowed to perform this action');
         });
 
-        // Fallback (optional but recommended)
+        // Fallback (DEBUG + PROD)
         $exceptions->render(function (\Throwable $e, $request) {
+
             if (config('app.debug')) {
                 return response()->json([
                     'success' => false,
                     'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
                 ], 500);
             }
 
