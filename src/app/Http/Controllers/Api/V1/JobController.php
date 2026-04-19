@@ -36,11 +36,7 @@ class JobController extends Controller
         */
 
         if ($request->filled('search')) {
-            $search = substr(
-                trim((string) $request->input('search')),
-                0,
-                100
-            );
+            $search = substr(trim((string) $request->input('search')), 0, 100);
 
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
@@ -69,18 +65,14 @@ class JobController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | Location Filter
+        | Location Filter (Improved: LIKE instead of exact)
         |--------------------------------------------------------------------------
         */
 
         if ($request->filled('location')) {
-            $location = substr(
-                trim((string) $request->input('location')),
-                0,
-                100
-            );
+            $location = substr(trim((string) $request->input('location')), 0, 100);
 
-            $query->where('location', $location);
+            $query->where('location', 'like', "%{$location}%");
         }
 
         /*
@@ -90,11 +82,11 @@ class JobController extends Controller
         */
 
         $perPage = (int) $request->input('per_page', 20);
-        $perPage = max(1, min($perPage, 50)); // max 50 for V1
+        $perPage = max(1, min($perPage, 50));
 
         $jobs = $query
             ->orderByDesc('published_at')
-            ->orderByDesc('id') // stable secondary sort
+            ->orderByDesc('id')
             ->paginate($perPage)
             ->through(function (JobVacancy $job) {
                 return [
@@ -113,24 +105,28 @@ class JobController extends Controller
 
     /*
     |--------------------------------------------------------------------------
-    | Show Published Job
+    | Show Published Job (FIXED: no data leak)
     |--------------------------------------------------------------------------
     */
 
-    public function show(JobVacancy $job): JsonResponse
+    public function show(int $id): JsonResponse
     {
+        $job = JobVacancy::published()
+            ->with('company:id,name')
+            ->findOrFail($id);
+
         return response()->json([
             'data' => [
-                'id'                => $job->id,
-                'title'             => $job->title,
-                'company_name'      => $job->company?->name,
-                'location'          => $job->location,
-                'employment_type'   => $job->employment_type,
-                'description'       => $job->description,
-                'external_apply_url' => $job->external_apply_url,
-                'published_at'      => $job->published_at,
-                'expired_at'        => $job->expired_at,
-                'poster_url'        => $job->poster_url,
+                'id'                  => $job->id,
+                'title'               => $job->title,
+                'company_name'        => $job->company?->name,
+                'location'            => $job->location,
+                'employment_type'     => $job->employment_type,
+                'description'         => $job->description,
+                'external_apply_url'  => $job->external_apply_url,
+                'published_at'        => $job->published_at,
+                'expired_at'          => $job->expired_at,
+                'poster_url'          => $job->poster_url,
             ],
         ]);
     }
@@ -139,7 +135,7 @@ class JobController extends Controller
     |--------------------------------------------------------------------------
     | Apply (Click Logging + Redirect URL)
     |--------------------------------------------------------------------------
-    | IMPORTANT: Add route throttle middleware.
+    | IMPORTANT: Use throttle middleware on route!
     |--------------------------------------------------------------------------
     */
 
@@ -147,15 +143,49 @@ class JobController extends Controller
     {
         $job = JobVacancy::published()->findOrFail($id);
 
-        $job->applicationLogs()->create([
-            'user_id'    => optional($request->user())->id,
-            'clicked_at' => now(),
-            'user_agent' => substr((string) $request->userAgent(), 0, 255),
-            'ip_address' => $request->ip(),
-        ]);
+        $userId = optional($request->user())->id;
+        $ip = $request->ip();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Basic Dedup (Prevent Spam Click)
+        | Strategy:
+        | - Same user OR same IP
+        | - Within last 10 seconds
+        |--------------------------------------------------------------------------
+        */
+
+        $alreadyLogged = $job->applicationLogs()
+            ->when($userId, fn($q) => $q->where('user_id', $userId))
+            ->when(! $userId, fn($q) => $q->where('ip_address', $ip))
+            ->where('clicked_at', '>=', now()->subSeconds(10))
+            ->exists();
+
+        if (! $alreadyLogged) {
+            $job->applicationLogs()->create([
+                'user_id'    => $userId,
+                'clicked_at' => now(),
+                'user_agent' => substr((string) $request->userAgent(), 0, 255),
+                'ip_address' => $ip,
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Basic URL Safety Check (defensive layer)
+        |--------------------------------------------------------------------------
+        */
+
+        $url = $job->external_apply_url;
+
+        if (! filter_var($url, FILTER_VALIDATE_URL)) {
+            return response()->json([
+                'message' => 'Invalid application URL.'
+            ], 422);
+        }
 
         return response()->json([
-            'redirect_url' => $job->external_apply_url,
+            'redirect_url' => $url,
         ]);
     }
 }

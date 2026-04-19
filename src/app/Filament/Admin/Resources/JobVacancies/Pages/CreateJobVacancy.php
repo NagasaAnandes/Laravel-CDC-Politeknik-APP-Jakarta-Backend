@@ -6,6 +6,8 @@ use App\Filament\Admin\Resources\JobVacancies\JobVacancyResource;
 use Filament\Resources\Pages\CreateRecord;
 use App\Domain\Approval\ApprovalService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Filament\Notifications\Notification;
 use App\Domain\Approval\Job\JobApprovalRules;
 
 class CreateJobVacancy extends CreateRecord
@@ -23,27 +25,54 @@ class CreateJobVacancy extends CreateRecord
         $service = app(ApprovalService::class);
         $rules   = app(JobApprovalRules::class);
 
-        if ($user->role->isAdmin()) {
+        try {
+            DB::transaction(function () use ($user, $service, $rules) {
 
-            // Admin auto-submit then approve
-            $service->submit(
-                model: $this->record,
-                actor: $user,
-                rules: $rules
-            );
+                // 🔄 reload record (hindari stale state)
+                $this->record->refresh();
 
-            $service->approve(
-                model: $this->record,
-                actor: $user,
-                rules: $rules
-            );
-        } else {
+                if ($user->role?->isAdmin()) {
 
-            $service->submit(
-                model: $this->record,
-                actor: $user,
-                rules: $rules
-            );
+                    // submit dulu
+                    $this->record = $service->submit(
+                        model: $this->record,
+                        actor: $user,
+                        rules: $rules
+                    );
+
+                    // lalu approve
+                    $this->record = $service->approve(
+                        model: $this->record,
+                        actor: $user,
+                        rules: $rules
+                    );
+                } else {
+
+                    $this->record = $service->submit(
+                        model: $this->record,
+                        actor: $user,
+                        rules: $rules
+                    );
+                }
+            });
+
+            // 🔔 UX feedback
+            Notification::make()
+                ->title('Job created successfully')
+                ->success()
+                ->send();
+        } catch (\Throwable $e) {
+
+            report($e);
+
+            Notification::make()
+                ->title('Failed to process job workflow')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+
+            // hentikan redirect / state Filament
+            $this->halt();
         }
     }
 }

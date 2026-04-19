@@ -47,13 +47,13 @@ class JobVacancy extends Model
     protected $casts = [
         'approval_status' => ApprovalStatus::class,
 
-        'is_active'   => 'boolean',
+        'is_active'    => 'boolean',
         'published_at' => 'datetime',
-        'expired_at'  => 'date',
+        'expired_at'   => 'datetime', // ✅ FIX (sebelumnya date)
 
         'submitted_at' => 'datetime',
-        'approved_at' => 'datetime',
-        'rejected_at' => 'datetime',
+        'approved_at'  => 'datetime',
+        'rejected_at'  => 'datetime',
     ];
 
     /*
@@ -64,12 +64,12 @@ class JobVacancy extends Model
 
     protected $attributes = [
         'approval_status' => 'draft',
-        'is_active' => false,
+        'is_active'       => false,
     ];
 
     /*
     |--------------------------------------------------------------------------
-    | Model Guard (Ownership Only)
+    | Model Guard (Domain Integrity)
     |--------------------------------------------------------------------------
     */
 
@@ -79,9 +79,15 @@ class JobVacancy extends Model
 
             // 🔒 Ownership immutable
             if ($model->isDirty('company_id')) {
-                throw new \LogicException(
-                    'Company ownership cannot be changed.'
-                );
+                throw new \LogicException('Company ownership cannot be changed.');
+            }
+        });
+
+        static::saving(function ($model) {
+
+            // 🔥 Prevent publish without approval
+            if ($model->is_active && $model->approval_status !== ApprovalStatus::APPROVED) {
+                throw new \LogicException('Cannot activate job that is not approved.');
             }
         });
     }
@@ -119,7 +125,52 @@ class JobVacancy extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | State Helpers (Pure Read-Only)
+    | Core Publish Logic (Single Source of Truth)
+    |--------------------------------------------------------------------------
+    */
+
+    private function isWithinPublishWindow(): bool
+    {
+        if (! $this->published_at || $this->published_at->isFuture()) {
+            return false;
+        }
+
+        if ($this->expired_at && $this->expired_at->isPast()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function isPublished(): bool
+    {
+        return $this->approval_status === ApprovalStatus::APPROVED
+            && $this->is_active
+            && $this->isWithinPublishWindow();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Query Scopes (SYNCED WITH HELPER)
+    |--------------------------------------------------------------------------
+    */
+
+    public function scopePublished(Builder $query): Builder
+    {
+        return $query
+            ->where('approval_status', ApprovalStatus::APPROVED->value)
+            ->where('is_active', true)
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->where(function ($q) {
+                $q->whereNull('expired_at')
+                    ->orWhere('expired_at', '>=', now()); // ✅ FIX (no whereDate)
+            });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | State Helpers
     |--------------------------------------------------------------------------
     */
 
@@ -128,9 +179,9 @@ class JobVacancy extends Model
         return $this->approval_status === ApprovalStatus::DRAFT;
     }
 
-    public function isPending(): bool
+    public function isSubmitted(): bool
     {
-        return $this->approval_status === ApprovalStatus::PENDING;
+        return $this->approval_status === ApprovalStatus::SUBMITTED;
     }
 
     public function isApproved(): bool
@@ -145,46 +196,26 @@ class JobVacancy extends Model
 
     public function isExpired(): bool
     {
-        return $this->expired_at?->isPast() === true;
-    }
-
-    public function isPublishWindowOpen(): bool
-    {
-        if (! $this->published_at || $this->published_at->isFuture()) {
-            return false;
-        }
-
-        if ($this->isExpired()) {
-            return false;
-        }
-
-        return true;
-    }
-
-    public function isPublished(): bool
-    {
-        return $this->isApproved()
-            && $this->is_active
-            && $this->isPublishWindowOpen();
+        return $this->expired_at && $this->expired_at->isPast();
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Query Scopes
+    | Tracking Helpers (Basic)
     |--------------------------------------------------------------------------
     */
 
-    public function scopePublished(Builder $query): Builder
+    public function clickCount(): int
     {
-        return $query
-            ->where('approval_status', ApprovalStatus::APPROVED->value)
-            ->where('is_active', true)
-            ->whereNotNull('published_at')
-            ->where('published_at', '<=', now())
-            ->where(function ($q) {
-                $q->whereNull('expired_at')
-                    ->orWhereDate('expired_at', '>=', now());
-            });
+        return $this->applicationLogs()->count();
+    }
+
+    public function uniqueUserClickCount(): int
+    {
+        return $this->applicationLogs()
+            ->whereNotNull('user_id')
+            ->distinct('user_id')
+            ->count('user_id');
     }
 
     /*

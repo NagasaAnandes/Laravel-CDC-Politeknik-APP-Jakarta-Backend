@@ -5,6 +5,7 @@ namespace App\Filament\Admin\Resources\JobVacancies\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Filters\SelectFilter;
 
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -19,6 +20,7 @@ use App\Domain\Approval\ApprovalService;
 use App\Enums\ApprovalStatus;
 use App\Domain\Approval\Job\JobApprovalRules;
 
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Auth;
 
 class JobVacanciesTable
@@ -29,6 +31,12 @@ class JobVacanciesTable
             ->columns([
                 TextColumn::make('title')
                     ->searchable()
+                    ->sortable()
+                    ->limit(40),
+
+                TextColumn::make('company.name')
+                    ->label('Company')
+                    ->searchable()
                     ->sortable(),
 
                 TextColumn::make('employment_type')
@@ -36,9 +44,9 @@ class JobVacanciesTable
                     ->formatStateUsing(fn(string $state) => match ($state) {
                         'fulltime' => 'Full-time',
                         'parttime' => 'Part-time',
-                        'intern' => 'Intern',
-                        'remote' => 'Remote',
-                        default => ucfirst($state),
+                        'intern'   => 'Intern',
+                        'remote'   => 'Remote',
+                        default    => ucfirst($state),
                     }),
 
                 TextColumn::make('approval_status')
@@ -46,14 +54,13 @@ class JobVacanciesTable
                     ->label('Approval')
                     ->colors([
                         'secondary' => ApprovalStatus::DRAFT->value,
-                        'warning'   => ApprovalStatus::PENDING->value,
+                        'warning'   => ApprovalStatus::SUBMITTED->value,
                         'success'   => ApprovalStatus::APPROVED->value,
                         'danger'    => ApprovalStatus::REJECTED->value,
                     ])
                     ->formatStateUsing(fn(ApprovalStatus $state) => $state->label()),
 
-
-                IconColumn::make('status')
+                IconColumn::make('is_published')
                     ->label('Published')
                     ->state(fn($record) => $record->isPublished())
                     ->boolean()
@@ -63,44 +70,53 @@ class JobVacanciesTable
                 TextColumn::make('published_at')
                     ->label('Published At')
                     ->dateTime()
+                    ->sortable()
                     ->placeholder('Immediate'),
 
                 TextColumn::make('expired_at')
                     ->label('Expires At')
-                    ->date()
+                    ->dateTime()
+                    ->sortable()
                     ->placeholder('—'),
             ])
 
             ->filters([
-                // optional, jika mau
+                SelectFilter::make('approval_status')
+                    ->label('Approval Status')
+                    ->options([
+                        ApprovalStatus::DRAFT->value     => 'Draft',
+                        ApprovalStatus::SUBMITTED->value => 'Pending',
+                        ApprovalStatus::APPROVED->value  => 'Approved',
+                        ApprovalStatus::REJECTED->value  => 'Rejected',
+                    ]),
             ])
 
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->visible(fn($record) => ! $record->isApproved()),
 
                 Action::make('approve')
                     ->label('Approve')
                     ->color('success')
                     ->icon('heroicon-o-check')
-                    ->visible(
-                        fn($record) =>
-                        $record->approval_status === ApprovalStatus::PENDING
-                    )
+                    ->visible(fn($record) => $record->approval_status === ApprovalStatus::SUBMITTED)
                     ->requiresConfirmation()
-                    ->action(function ($record) {
-                        /** @var \App\Models\User|null $user */
+                    ->modalHeading('Approve Job')
+                    ->modalDescription('Are you sure you want to approve this job?')
+                    ->action(function ($record, ApprovalService $service) {
+
+
                         $user = Auth::user();
 
-                        if (! $user || ! $user->can('approve', $record)) {
+                        if (! $user || ! Gate::allows('approve', $record)) {
                             abort(403);
                         }
 
-                        app(ApprovalService::class)
-                            ->approve(
-                                $record,
-                                $user,
-                                new JobApprovalRules()
-                            );
+                        $service->approve(
+                            $record,
+                            $user,
+                            new JobApprovalRules()
+                        );
 
                         Notification::make()
                             ->title('Job approved successfully')
@@ -112,31 +128,30 @@ class JobVacanciesTable
                     ->label('Reject')
                     ->color('danger')
                     ->icon('heroicon-o-x-mark')
-                    ->visible(
-                        fn($record) =>
-                        $record->approval_status === ApprovalStatus::PENDING
-                    )
-                    ->form([
+                    ->visible(fn($record) => $record->approval_status === ApprovalStatus::SUBMITTED)
+                    ->schema([
                         Textarea::make('reason')
-                            ->required(),
+                            ->label('Rejection Reason')
+                            ->required()
+                            ->rows(4)
+                            ->placeholder('Explain why this job is rejected...')
                     ])
-                    ->action(function ($record, array $data) {
-                        /** @var \App\Models\User|null $user */
+                    ->modalHeading('Reject Job')
+                    ->modalDescription('Provide a clear reason for rejection.')
+                    ->action(function ($record, array $data, ApprovalService $service) {
+
                         $user = Auth::user();
 
-                        if (! $user || ! $user->can('reject', $record)) {
+                        if (! $user || ! Gate::allows('reject', $record)) {
                             abort(403);
                         }
 
-                        app(ApprovalService::class)
-                            ->reject(
-                                $record,
-                                $user,
-                                $data['reason'],
-                                new JobApprovalRules()
-                            );
-
-
+                        $service->reject(
+                            $record,
+                            $user,
+                            $data['reason'],
+                            new JobApprovalRules()
+                        );
 
                         Notification::make()
                             ->title('Job rejected')
@@ -145,25 +160,22 @@ class JobVacanciesTable
                     }),
 
                 DeleteAction::make()
-                    ->visible(function ($record) {
-
-                        /** @var \App\Models\User|null $user */
-                        $user = Auth::user();
-
-                        return $user?->can('delete', $record) === true;
-                    })
+                    ->visible(fn($record) => Gate::allows('delete', $record))
                     ->action(function ($record) {
 
-                        /** @var \App\Models\User|null $user */
                         $user = Auth::user();
 
-                        if (! $user || ! $user->can('delete', $record)) {
+                        if (! $user || ! Gate::allows('delete', $record)) {
                             abort(403);
                         }
 
                         $record->delete();
-                    })
 
+                        Notification::make()
+                            ->title('Job deleted')
+                            ->success()
+                            ->send();
+                    }),
             ])
 
             ->toolbarActions([
@@ -172,20 +184,22 @@ class JobVacanciesTable
                         ->requiresConfirmation()
                         ->action(function ($records) {
 
-                            /** @var \App\Models\User|null $user */
                             $user = Auth::user();
 
                             foreach ($records as $record) {
 
-                                if (! $user || ! $user->can('delete', $record)) {
+                                if (! $user || ! Gate::allows('delete', $record)) {
                                     abort(403);
                                 }
 
                                 $record->delete();
                             }
-                        })
-                        ->requiresConfirmation()
 
+                            Notification::make()
+                                ->title('Selected jobs deleted')
+                                ->success()
+                                ->send();
+                        }),
                 ]),
             ]);
     }

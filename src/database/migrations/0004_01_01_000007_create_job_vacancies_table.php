@@ -21,13 +21,13 @@ return new class extends Migration
 
             $table->string('title', 150);
             $table->string('location', 100)->nullable();
-            $table->string('employment_type', 50); // avoid DB enum
+            $table->string('employment_type', 50);
             $table->text('description');
             $table->string('external_apply_url', 255);
             $table->string('poster_path')->nullable();
 
             // Approval Workflow
-            $table->string('approval_status')->default('draft');
+            $table->string('approval_status', 20)->default('draft')->index();
             $table->timestamp('submitted_at')->nullable();
 
             $table->timestamp('approved_at')->nullable();
@@ -44,21 +44,18 @@ return new class extends Migration
 
             $table->text('rejection_reason')->nullable();
 
-            // Publication
-            $table->boolean('is_active')->default(false);
-            $table->timestamp('published_at')->nullable();
-            $table->date('expired_at')->nullable();
+            // Publication (single source of truth approach)
+            $table->timestamp('published_at')->nullable()->index();
+            $table->timestamp('expired_at')->nullable()->index();
+
+            // OPTIONAL: keep for admin toggle, but dangerous if not controlled
+            $table->boolean('is_active')->default(false)->index();
 
             $table->timestamps();
             $table->softDeletes();
 
-            // Index
-            $table->index('company_id');
-            $table->index('approval_status');
-            $table->index(
-                ['approval_status', 'is_active', 'published_at', 'expired_at'],
-                'job_public_visibility_index'
-            );
+            // Optimized indexes
+            $table->index(['approval_status', 'is_active', 'published_at'], 'job_visibility_core_index');
         });
     }
 

@@ -13,62 +13,87 @@ class JobVacancyForm
     {
         return $schema->components([
 
-            Forms\Components\TextInput::make('title')
-                ->required()
-                ->maxLength(255),
-
             /*
             |--------------------------------------------------------------------------
-            | Company (Immutable After Create)
+            | Job Information
             |--------------------------------------------------------------------------
             */
 
-            Forms\Components\Select::make('company_id')
-                ->label('Company')
-                ->relationship('company', 'name')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->disabled(fn($record) => $record !== null) // 🔒 immutable after create
-                ->dehydrated(fn($record) => $record === null), // prevent update mutation
+            Section::make('Job Information')
+                ->schema([
 
-            Forms\Components\TextInput::make('location')
-                ->maxLength(100),
+                    Forms\Components\TextInput::make('title')
+                        ->required()
+                        ->maxLength(255)
+                        ->disabled(fn($record) => $record?->isApproved()),
 
-            Forms\Components\Select::make('employment_type')
-                ->options([
-                    'fulltime' => 'Full Time',
-                    'parttime' => 'Part Time',
-                    'intern'   => 'Internship',
-                    'remote'   => 'Remote',
-                ])
-                ->required(),
+                    Forms\Components\Select::make('company_id')
+                        ->label('Company')
+                        ->relationship('company', 'name')
+                        ->searchable()
+                        ->preload()
+                        ->required()
+                        ->disabled(fn($record) => $record !== null)
+                        ->dehydrated(fn($record) => $record === null),
 
-            Forms\Components\Textarea::make('description')
-                ->required()
-                ->columnSpanFull(),
+                    Forms\Components\TextInput::make('location')
+                        ->maxLength(100)
+                        ->disabled(fn($record) => $record?->isApproved()),
 
-            Forms\Components\TextInput::make('external_apply_url')
-                ->label('External Apply URL')
-                ->url()
-                ->required()
-                ->maxLength(2048)
-                ->placeholder('https://www.company.com/careers')
-                ->helperText('Arahkan ke halaman resmi perusahaan'),
+                    Forms\Components\Select::make('employment_type')
+                        ->options([
+                            'fulltime' => 'Full Time',
+                            'parttime' => 'Part Time',
+                            'intern'   => 'Internship',
+                            'remote'   => 'Remote',
+                        ])
+                        ->required()
+                        ->disabled(fn($record) => $record?->isApproved()),
 
-            FileUpload::make('poster_path')
-                ->label('Job Poster')
-                ->image()
-                ->disk('public')
-                ->directory('job-posters')
-                ->visibility('public')
-                ->imagePreviewHeight('200')
-                ->maxSize(2048)
-                ->nullable(),
+                    Forms\Components\Textarea::make('description')
+                        ->required()
+                        ->columnSpanFull()
+                        ->disabled(fn($record) => $record?->isApproved()),
+
+                ]),
 
             /*
             |--------------------------------------------------------------------------
-            | Read-Only Workflow Display
+            | Application
+            |--------------------------------------------------------------------------
+            */
+
+            Section::make('Application')
+                ->schema([
+
+                    Forms\Components\TextInput::make('external_apply_url')
+                        ->label('External Apply URL')
+                        ->url()
+                        ->rule('active_url')
+                        ->required()
+                        ->maxLength(2048)
+                        ->placeholder('https://www.company.com/careers')
+                        ->helperText('Arahkan ke halaman resmi perusahaan')
+                        ->disabled(fn($record) => $record?->isApproved()),
+
+                    FileUpload::make('poster_path')
+                        ->label('Job Poster')
+                        ->image()
+                        ->disk('public')
+                        ->directory('job-posters')
+                        ->visibility('public')
+                        ->imagePreviewHeight('200')
+                        ->imageEditor()
+                        ->downloadable()
+                        ->maxSize(2048)
+                        ->nullable()
+                        ->disabled(fn($record) => $record?->isApproved()),
+
+                ]),
+
+            /*
+            |--------------------------------------------------------------------------
+            | Publication Status (Readonly)
             |--------------------------------------------------------------------------
             */
 
@@ -77,27 +102,19 @@ class JobVacancyForm
 
                     Forms\Components\TextInput::make('approval_status_display')
                         ->label('Approval Status')
-                        ->formatStateUsing(
-                            fn($record) => $record?->approval_status?->label()
-                        )
+                        ->formatStateUsing(fn($record) => $record?->approval_status?->label())
                         ->disabled()
                         ->dehydrated(false),
 
                     Forms\Components\TextInput::make('publish_status_display')
                         ->label('Published')
-                        ->formatStateUsing(
-                            fn($record) =>
-                            $record?->isPublished() ? 'Yes' : 'No'
-                        )
+                        ->formatStateUsing(fn($record) => $record?->isPublished() ? 'Yes' : 'No')
                         ->disabled()
                         ->dehydrated(false),
 
                     Forms\Components\TextInput::make('published_at_display')
                         ->label('Published At')
-                        ->formatStateUsing(
-                            fn($record) =>
-                            $record?->published_at?->toDateTimeString() ?? '—'
-                        )
+                        ->formatStateUsing(fn($record) => $record?->published_at?->toDateTimeString() ?? '—')
                         ->disabled()
                         ->dehydrated(false),
 
@@ -110,7 +127,8 @@ class JobVacancyForm
                             'nullable',
                             'date',
                             'after_or_equal:today',
-                        ]),
+                        ])
+                        ->disabled(fn($record) => $record?->isApproved()),
                 ]),
         ]);
     }

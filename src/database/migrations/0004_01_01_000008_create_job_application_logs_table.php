@@ -13,15 +13,22 @@ return new class extends Migration
     {
         Schema::create('job_application_logs', function (Blueprint $table) {
             $table->id();
+
             $table->foreignId('job_vacancy_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
-            $table->timestamp('clicked_at');
-            $table->text('user_agent')->nullable();
-            $table->string('ip_address', 45)->nullable();
 
-            $table->index('job_vacancy_id');
+            $table->string('session_id')->nullable();
+            $table->string('event_type', 20); // click, apply
+
+            $table->timestamp('clicked_at')->useCurrent();
+
+            $table->string('ip_address', 45)->nullable();
+            $table->text('user_agent')->nullable();
+
+            // Indexing
+            $table->index(['job_vacancy_id', 'clicked_at']);
             $table->index('user_id');
-            $table->index('clicked_at');
+            $table->index('event_type');
         });
     }
 

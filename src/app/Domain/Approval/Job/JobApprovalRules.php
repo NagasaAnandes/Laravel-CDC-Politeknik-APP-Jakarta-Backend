@@ -51,7 +51,7 @@ class JobApprovalRules implements ApprovalRules
 
         return $actor->isActive()
             && $actor->isAdmin()
-            && $model->approval_status === ApprovalStatus::PENDING;
+            && $model->approval_status === ApprovalStatus::SUBMITTED; // ✅ FIX
     }
 
     public function canReject(
@@ -70,7 +70,6 @@ class JobApprovalRules implements ApprovalRules
             return false;
         }
 
-        // Revert hanya boleh dari APPROVED atau REJECTED
         if (! in_array(
             $model->approval_status,
             [ApprovalStatus::APPROVED, ApprovalStatus::REJECTED],
@@ -79,12 +78,10 @@ class JobApprovalRules implements ApprovalRules
             return false;
         }
 
-        // Admin selalu boleh revert
         if ($actor->isAdmin()) {
             return true;
         }
 
-        // Optional: company boleh revert miliknya sendiri
         if ($actor->role?->isCompany()) {
             return $model->company_id === $actor->company_id;
         }
@@ -106,21 +103,30 @@ class JobApprovalRules implements ApprovalRules
     ): void {
         /** @var JobVacancy $model */
 
-        // Submit invariant
-        if ($to === ApprovalStatus::PENDING) {
+        // ✅ Submit invariant
+        if ($to === ApprovalStatus::SUBMITTED) {
+
             if (empty($model->external_apply_url)) {
                 throw new \LogicException(
                     'Job must have external apply URL before submission.'
                 );
             }
+
+            if (empty($model->title) || empty($model->description)) {
+                throw new \LogicException(
+                    'Job must have title and description before submission.'
+                );
+            }
         }
 
-        // Approve invariant
+        // ✅ Approve invariant (STRICT)
         if ($to === ApprovalStatus::APPROVED) {
+
+            // ❌ Block expired job approval (clear decision)
             if ($model->expired_at && $model->expired_at->isPast()) {
-                // Notice: we DO NOT block approval.
-                // We just allow approve but it won't publish.
-                return;
+                throw new \LogicException(
+                    'Cannot approve expired job.'
+                );
             }
         }
     }
@@ -137,6 +143,7 @@ class JobApprovalRules implements ApprovalRules
 
         $model->submitted_at = now();
 
+        // reset approval
         $model->approved_at = null;
         $model->approved_by = null;
 
@@ -144,6 +151,7 @@ class JobApprovalRules implements ApprovalRules
         $model->rejected_by = null;
         $model->rejection_reason = null;
 
+        // force inactive
         $model->is_active = false;
     }
 
@@ -154,13 +162,7 @@ class JobApprovalRules implements ApprovalRules
         $model->approved_at = now();
         $model->approved_by = $actor->getKey();
 
-        // Publication decision
-        if ($model->expired_at && $model->expired_at->isPast()) {
-            // Approved but not visible
-            $model->is_active = false;
-            return;
-        }
-
+        // ✅ Single publication decision point
         $model->is_active = true;
         $model->published_at ??= now();
     }
@@ -189,7 +191,6 @@ class JobApprovalRules implements ApprovalRules
     {
         /** @var JobVacancy $model */
 
-        // Reset workflow metadata
         $model->submitted_at = null;
 
         $model->approved_at = null;
@@ -199,10 +200,47 @@ class JobApprovalRules implements ApprovalRules
         $model->rejected_by = null;
         $model->rejection_reason = null;
 
-        // Revert always makes it inactive
+        // deactivate only (keep history)
         $model->is_active = false;
 
-        // Optional: reset publication
-        $model->published_at = null;
+        // ⚠️ optional: jangan hapus published_at untuk audit
+        // $model->published_at = null;
+    }
+
+    public function canCancel(Model $model, User $actor): bool
+    {
+        /** @var JobVacancy $model */
+
+        if (! $actor->isActive()) {
+            return false;
+        }
+
+        // hanya admin yang boleh cancel
+        if ($actor->isAdmin()) {
+            return $model->approval_status === ApprovalStatus::APPROVED;
+        }
+
+        // optional: company boleh cancel miliknya sendiri
+        if ($actor->role?->isCompany()) {
+            return $model->company_id === $actor->company_id
+                && $model->approval_status === ApprovalStatus::APPROVED;
+        }
+
+        return false;
+    }
+
+    public function onCancel(Model $model, User $actor): void
+    {
+        /** @var JobVacancy $model */
+
+        // cancel = approved → cancelled (soft disable)
+
+        $model->is_active = false;
+
+        // optional: keep published_at for audit
+        // do NOT null it
+
+        // optional tambahan (kalau mau explicit)
+        // $model->cancelled_at = now(); (kalau ada fieldnya)
     }
 }
