@@ -9,9 +9,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
-use App\Models\ApprovalLog;
-use App\Models\User;
 
 class JobVacancy extends Model
 {
@@ -36,6 +35,9 @@ class JobVacancy extends Model
         // Publication fields (controlled by Service)
         'is_active',
         'published_at',
+
+        // Concurrency control
+        'version',
     ];
 
     /*
@@ -49,11 +51,14 @@ class JobVacancy extends Model
 
         'is_active'    => 'boolean',
         'published_at' => 'datetime',
-        'expired_at'   => 'datetime', // ✅ FIX (sebelumnya date)
+        'expired_at'   => 'datetime',
 
         'submitted_at' => 'datetime',
         'approved_at'  => 'datetime',
         'rejected_at'  => 'datetime',
+
+        // 🔥 CRITICAL FIX (optimistic locking)
+        'version' => 'integer',
     ];
 
     /*
@@ -65,6 +70,7 @@ class JobVacancy extends Model
     protected $attributes = [
         'approval_status' => 'draft',
         'is_active'       => false,
+        'version'         => 0,
     ];
 
     /*
@@ -86,7 +92,7 @@ class JobVacancy extends Model
         static::saving(function ($model) {
 
             // 🔥 Prevent publish without approval
-            if ($model->is_active && $model->approval_status !== ApprovalStatus::APPROVED) {
+            if ($model->is_active && ! $model->isApproved()) {
                 throw new \LogicException('Cannot activate job that is not approved.');
             }
         });
@@ -118,7 +124,7 @@ class JobVacancy extends Model
         return $this->belongsTo(User::class, 'rejected_by');
     }
 
-    public function applicationLogs()
+    public function applicationLogs(): HasMany
     {
         return $this->hasMany(JobApplicationLog::class);
     }
@@ -164,7 +170,7 @@ class JobVacancy extends Model
             ->where('published_at', '<=', now())
             ->where(function ($q) {
                 $q->whereNull('expired_at')
-                    ->orWhere('expired_at', '>=', now()); // ✅ FIX (no whereDate)
+                    ->orWhere('expired_at', '>=', now());
             });
     }
 
@@ -201,21 +207,31 @@ class JobVacancy extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | Tracking Helpers (Basic)
+    | Tracking Helpers (LEAN & VALID)
     |--------------------------------------------------------------------------
     */
 
     public function clickCount(): int
     {
-        return $this->applicationLogs()->count();
+        return $this->applicationLogs()
+            ->where('event_type', 'click')
+            ->count();
     }
 
-    public function uniqueUserClickCount(): int
+    public function uniqueVisitorCount(): int
     {
         return $this->applicationLogs()
-            ->whereNotNull('user_id')
-            ->distinct('user_id')
-            ->count('user_id');
+            ->where('event_type', 'click')
+            ->whereNotNull('session_id')
+            ->distinct('session_id')
+            ->count('session_id');
+    }
+
+    public function applyCount(): int
+    {
+        return $this->applicationLogs()
+            ->where('event_type', 'apply')
+            ->count();
     }
 
     /*

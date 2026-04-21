@@ -85,8 +85,6 @@ class ApprovalService
 
         return DB::transaction(function () use ($model, $actor, $to, $action, $rules, $reason) {
 
-            $model = $this->lock($model);
-
             if (method_exists($model, 'trashed') && $model->trashed()) {
                 throw new InvalidTransitionException('Cannot transition soft-deleted model.');
             }
@@ -135,16 +133,24 @@ class ApprovalService
             };
 
             // 🔥 Optimistic Locking
+
+            $originalVersion = $model->version;
+
+            $model->approval_status = $to;
+
+            $data = $model->getDirty();
+
+            $data['version'] = $originalVersion + 1;
+
             $updated = $model->newQuery()
                 ->whereKey($model->getKey())
                 ->where('version', $originalVersion)
-                ->update(array_merge(
-                    $model->getAttributes(),
-                    ['version' => $originalVersion + 1]
-                ));
+                ->update($data);
 
             if (! $updated) {
-                throw new \RuntimeException('Race condition detected. Please retry.');
+                throw new \RuntimeException(
+                    'Data has been modified by another user. Please refresh and try again.'
+                );
             }
 
             $model->refresh();
@@ -162,14 +168,6 @@ class ApprovalService
     | INTERNAL
     |--------------------------------------------------------------------------
     */
-
-    protected function lock(Model $model): Model
-    {
-        return $model::query()
-            ->whereKey($model->getKey())
-            ->lockForUpdate()
-            ->firstOrFail();
-    }
 
     protected function canTransition(ApprovalStatus $from, ApprovalStatus $to): bool
     {

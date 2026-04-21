@@ -3,7 +3,6 @@
 namespace App\Filament\Admin\Pages;
 
 use App\Models\JobApplicationLog;
-use Carbon\Carbon;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables;
@@ -18,7 +17,7 @@ class JobClicks extends Page implements HasTable
 
     protected string $view = 'filament.admin.pages.job-clicks';
 
-    protected static ?string $navigationLabel = 'Job Clicks';
+    protected static ?string $navigationLabel = 'Job Tracking';
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedCursorArrowRays;
 
@@ -27,6 +26,12 @@ class JobClicks extends Page implements HasTable
     protected static ?int $navigationSort = 62;
 
     public string $period = 'all';
+
+    /*
+    |--------------------------------------------------------------------------
+    | Header Actions
+    |--------------------------------------------------------------------------
+    */
 
     protected function getHeaderActions(): array
     {
@@ -38,15 +43,21 @@ class JobClicks extends Page implements HasTable
         ];
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Query (SOURCE OF TRUTH)
+    |--------------------------------------------------------------------------
+    */
+
     public function getTableQuery(): Builder
     {
         return JobApplicationLog::query()
             ->with(['jobVacancy', 'user'])
             ->when($this->period !== 'all', function ($query) {
                 $query->where(
-                    'clicked_at',
+                    'created_at',
                     '>=',
-                    Carbon::now()->subDays(
+                    now()->subDays(
                         match ($this->period) {
                             '7d' => 7,
                             '30d' => 30,
@@ -57,10 +68,29 @@ class JobClicks extends Page implements HasTable
             });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Filters
+    |--------------------------------------------------------------------------
+    */
+
     protected function getTableFilters(): array
     {
         return [
+            Tables\Filters\SelectFilter::make('event_type')
+                ->label('Event Type')
+                ->options([
+                    'click' => 'Click',
+                    'apply' => 'Apply',
+                ]),
+
+            Tables\Filters\SelectFilter::make('job_vacancy_id')
+                ->label('Job')
+                ->relationship('jobVacancy', 'title')
+                ->searchable(),
+
             Tables\Filters\SelectFilter::make('period')
+                ->label('Period')
                 ->options([
                     'all' => 'All Time',
                     '7d' => 'Last 7 Days',
@@ -76,18 +106,29 @@ class JobClicks extends Page implements HasTable
                         '30d' => 30,
                     };
 
-                    $query->where('clicked_at', '>=', now()->subDays($days));
+                    $query->where('created_at', '>=', now()->subDays($days));
                 }),
         ];
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Columns
+    |--------------------------------------------------------------------------
+    */
 
     protected function getTableColumns(): array
     {
         return [
             Tables\Columns\TextColumn::make('jobVacancy.title')
                 ->label('Job')
-                ->searchable(),
+                ->searchable()
+                ->sortable(),
+
+            Tables\Columns\TextColumn::make('event_type')
+                ->label('Event')
+                ->badge()
+                ->color(fn($state) => $state === 'apply' ? 'success' : 'info'),
 
             Tables\Columns\TextColumn::make('user.name')
                 ->label('User')
@@ -96,52 +137,77 @@ class JobClicks extends Page implements HasTable
                     $record->user?->name ?? 'Guest'
                 ),
 
-            Tables\Columns\TextColumn::make('clicked_at')
-                ->label('Clicked At')
-                ->dateTime('d M Y • H:i')
-                ->sortable(),
-
             Tables\Columns\TextColumn::make('user.email')
                 ->label('Email')
-                ->toggleable()
-                ->visible(true),
+                ->toggleable(),
+
+            Tables\Columns\TextColumn::make('session_id')
+                ->label('Session')
+                ->toggleable(isToggledHiddenByDefault: true),
 
             Tables\Columns\TextColumn::make('ip_address')
-                ->label('IP Address'),
+                ->label('IP Address')
+                ->toggleable(isToggledHiddenByDefault: true),
+
+            Tables\Columns\TextColumn::make('user_agent')
+                ->label('User Agent')
+                ->limit(40)
+                ->toggleable(isToggledHiddenByDefault: true),
+
+            Tables\Columns\TextColumn::make('created_at')
+                ->label('Time')
+                ->dateTime('d M Y • H:i')
+                ->sortable(),
         ];
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Export (SYNCED WITH FILTERS)
+    |--------------------------------------------------------------------------
+    */
 
     public function export()
     {
         return response()->streamDownload(function () {
-            echo "Job,User,Email,Clicked At,IP\n";
 
-            JobApplicationLog::with(['jobVacancy', 'user'])
-                ->orderByDesc('clicked_at')
+            echo "Job,Event,User,Email,Time,Session,IP\n";
+
+            $query = $this->getTableQuery();
+
+            $query->orderByDesc('created_at')
                 ->chunk(200, function ($logs) {
+
                     foreach ($logs as $log) {
                         echo sprintf(
-                            "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                            "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
                             $log->jobVacancy?->title,
+                            $log->event_type,
                             $log->user?->name ?? 'Guest',
                             $log->user?->email ?? '',
-                            $log->clicked_at,
+                            $log->created_at,
+                            $log->session_id,
                             $log->ip_address
                         );
                     }
                 });
-        }, 'job-clicks.csv');
+        }, 'job-tracking.csv');
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Table Config
+    |--------------------------------------------------------------------------
+    */
 
     protected function isTablePaginationEnabled(): bool
     {
-        return true; // Bisa kamu ubah false kalau mau tanpa pagination
+        return true;
     }
 
     protected function getTableDefaultSortColumn(): ?string
     {
-        return 'clicked_at';
+        return 'created_at';
     }
 
     protected function getTableDefaultSortDirection(): ?string
@@ -151,11 +217,11 @@ class JobClicks extends Page implements HasTable
 
     protected function getTableActions(): array
     {
-        return []; // ❌ No Edit / Delete
+        return []; // log = immutable
     }
 
     protected function getTableBulkActions(): array
     {
-        return []; // ❌ No Bulk
+        return []; // no bulk
     }
 }

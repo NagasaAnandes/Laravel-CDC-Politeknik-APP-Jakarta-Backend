@@ -15,6 +15,16 @@ return new class extends Migration
 
             $table->id();
 
+            /*
+    |--------------------------------------------------------------------------
+    | Optimistic Locking (IMPORTANT)
+    |--------------------------------------------------------------------------
+    */
+
+            $table->unsignedInteger('version')
+                ->default(0)
+                ->index();
+
             $table->foreignId('company_id')
                 ->constrained()
                 ->cascadeOnDelete();
@@ -44,18 +54,19 @@ return new class extends Migration
 
             $table->text('rejection_reason')->nullable();
 
-            // Publication (single source of truth approach)
+            // Publication
             $table->timestamp('published_at')->nullable()->index();
             $table->timestamp('expired_at')->nullable()->index();
 
-            // OPTIONAL: keep for admin toggle, but dangerous if not controlled
             $table->boolean('is_active')->default(false)->index();
 
             $table->timestamps();
             $table->softDeletes();
 
-            // Optimized indexes
-            $table->index(['approval_status', 'is_active', 'published_at'], 'job_visibility_core_index');
+            $table->index(
+                ['approval_status', 'is_active', 'published_at'],
+                'job_visibility_core_index'
+            );
         });
     }
 
