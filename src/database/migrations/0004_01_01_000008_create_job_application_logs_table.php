@@ -12,23 +12,32 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('job_application_logs', function (Blueprint $table) {
+
             $table->id();
 
-            $table->foreignId('job_vacancy_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('job_vacancy_id')
+                ->constrained()
+                ->cascadeOnDelete();
 
-            $table->string('session_id')->nullable();
-            $table->string('event_type', 20); // click, apply
+            $table->foreignId('user_id')
+                ->nullable()
+                ->constrained()
+                ->nullOnDelete();
 
-            $table->timestamp('clicked_at')->useCurrent();
+            // 🔥 Tracking core
+            $table->string('session_id')->nullable()->index();
+            $table->string('event_type', 20)->index(); // click, apply
 
+            // 🔥 Standard timestamps (IMPORTANT)
+            $table->timestamps();
+
+            // 🔍 Metadata
             $table->string('ip_address', 45)->nullable();
             $table->text('user_agent')->nullable();
 
-            // Indexing
-            $table->index(['job_vacancy_id', 'clicked_at']);
-            $table->index('user_id');
-            $table->index('event_type');
+            // 🚀 Optimized indexes
+            $table->index(['job_vacancy_id', 'event_type', 'created_at'], 'job_event_time_index');
+            $table->index(['event_type', 'created_at'], 'event_time_index');
         });
     }
 
