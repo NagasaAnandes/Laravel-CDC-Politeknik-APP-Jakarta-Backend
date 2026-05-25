@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\UpdateProfileRequest;
+use App\Http\Requests\Api\V1\Profile\StoreCvRequest;
 use App\Models\Experience;
 use App\Models\Education;
 use App\Models\Certificate;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use App\Support\ApiResponse;
 use App\Domain\CareerProfile\Services\ExperienceService;
 use App\Domain\CareerProfile\Services\CertificateService;
@@ -39,8 +42,65 @@ class ProfileController extends Controller
                 'linkedin_url' => $user->linkedin_url,
                 'graduation_year' => $user->graduation_year,
                 'program_study' => $user->program_study,
+                'has_cv' => $user->hasCv(),
+                'cv_url' => $user->cv_url,
             ],
         ]);
+    }
+
+    public function storeCv(StoreCvRequest $request)
+    {
+        $user = $request->user();
+        $oldCvPath = $user->cv_path;
+
+        $file = $request->file('file');
+        $directory = 'cvs/user-' . $user->id;
+        $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
+        $path = Storage::disk('public')->putFileAs($directory, $file, $filename);
+
+        DB::transaction(function () use ($user, $path, $oldCvPath) {
+            $user->forceFill(['cv_path' => $path])->save();
+
+            if ($oldCvPath && Storage::disk('public')->exists($oldCvPath)) {
+                Storage::disk('public')->delete($oldCvPath);
+            }
+        });
+
+        return ApiResponse::success(
+            [
+                'cv_url' => $user->fresh()->cv_url,
+                'has_cv' => true,
+            ],
+            'CV uploaded successfully',
+            201
+        );
+    }
+
+    public function downloadCv(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user->hasCv() || !Storage::disk('public')->exists($user->cv_path)) {
+            return ApiResponse::notFound('File not found');
+        }
+
+        return response()->download(Storage::disk('public')->path($user->cv_path));
+    }
+
+    public function deleteCv(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->cv_path && Storage::disk('public')->exists($user->cv_path)) {
+            Storage::disk('public')->delete($user->cv_path);
+        }
+
+        $user->forceFill(['cv_path' => null])->save();
+
+        return ApiResponse::success(
+            null,
+            'CV deleted successfully'
+        );
     }
 
     public function update(UpdateProfileRequest $request)
@@ -90,7 +150,7 @@ class ProfileController extends Controller
 
     public function updateExperience(
         UpdateExperienceRequest $request,
-        $id,
+        int $id,
         ExperienceService $service
     ) {
         $experience = Experience::findOrFail($id);
@@ -107,7 +167,7 @@ class ProfileController extends Controller
         );
     }
 
-    public function deleteExperience($id)
+    public function deleteExperience(int $id)
     {
         $experience = Experience::findOrFail($id);
 
@@ -154,7 +214,7 @@ class ProfileController extends Controller
         );
     }
 
-    public function deleteEducation($id)
+    public function deleteEducation(int $id)
     {
         $education = Education::findOrFail($id);
 
@@ -195,7 +255,7 @@ class ProfileController extends Controller
         );
     }
 
-    public function downloadCertificate($id)
+    public function downloadCertificate(int $id)
     {
         $certificate = Certificate::findOrFail($id);
 
@@ -208,7 +268,7 @@ class ProfileController extends Controller
         return Storage::download($certificate->file_path);
     }
 
-    public function deleteCertificate($id, CertificateService $service)
+    public function deleteCertificate(int $id, CertificateService $service)
     {
         $certificate = Certificate::findOrFail($id);
 

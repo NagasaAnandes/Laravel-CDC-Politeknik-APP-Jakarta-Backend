@@ -6,6 +6,8 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+      args:
+        COMPOSER_INSTALL_FLAGS: ""
     container_name: cdc_app
     restart: unless-stopped
     env_file:
@@ -17,6 +19,8 @@ services:
       - "9000"
     volumes:
       - ./src:/var/www
+      - cdc-bootstrap-cache:/var/www/bootstrap/cache
+      - cdc-vendor:/var/www/vendor
     networks:
       - cdc-network
     healthcheck:
@@ -92,6 +96,8 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+      args:
+        COMPOSER_INSTALL_FLAGS: ""
     container_name: cdc_queue
     restart: unless-stopped
     env_file:
@@ -102,6 +108,8 @@ services:
     command: php artisan queue:work --sleep=3 --tries=3 --timeout=90
     volumes:
       - ./src:/var/www
+      - cdc-bootstrap-cache:/var/www/bootstrap/cache
+      - cdc-vendor:/var/www/vendor
     networks:
       - cdc-network
     healthcheck:
@@ -117,6 +125,8 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+      args:
+        COMPOSER_INSTALL_FLAGS: ""
     container_name: cdc_scheduler
     restart: unless-stopped
     env_file:
@@ -127,6 +137,8 @@ services:
     command: sh -c "while true; do php artisan schedule:run; sleep 60; done"
     volumes:
       - ./src:/var/www
+      - cdc-bootstrap-cache:/var/www/bootstrap/cache
+      - cdc-vendor:/var/www/vendor
     networks:
       - cdc-network
     healthcheck:
@@ -146,5 +158,7 @@ networks:
 # Persistent Volumes
 # =====================================
 volumes:
+  cdc-bootstrap-cache:
   cdc-db-data:
   redis-data:
+  cdc-vendor:

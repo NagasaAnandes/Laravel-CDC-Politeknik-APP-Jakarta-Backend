@@ -3,11 +3,6 @@
 namespace App\Filament\Admin\Resources\Users\Schemas;
 
 use App\Enums\UserRole;
-use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
 use Filament\Forms;
 
@@ -45,6 +40,31 @@ class UserForm
 
             Forms\Components\Toggle::make('is_active')
                 ->default(true),
+
+            Forms\Components\TextInput::make('phone')
+                ->tel()
+                ->maxLength(30)
+                ->nullable()
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : null),
+
+            Forms\Components\TextInput::make('linkedin_url')
+                ->url()
+                ->maxLength(255)
+                ->nullable()
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : null),
+
+            Forms\Components\TextInput::make('graduation_year')
+                ->numeric()
+                ->rule('digits:4')
+                ->minValue(1970)
+                ->maxValue((int) now()->year)
+                ->nullable()
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? (int) $state : null),
+
+            Forms\Components\TextInput::make('program_study')
+                ->maxLength(255)
+                ->nullable()
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : null),
 
             Forms\Components\TextInput::make('password')
                 ->password()

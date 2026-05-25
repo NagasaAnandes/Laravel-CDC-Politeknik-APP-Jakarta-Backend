@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\ApprovalStatus;
 use Illuminate\Console\Command;
 use App\Models\Event;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +18,7 @@ class ExpireEventsCommand extends Command
         $expiredCount = 0;
 
         Event::query()
-            ->where('approval_status', 'approved')
+            ->where('approval_status', ApprovalStatus::APPROVED->value)
             ->where('is_active', true)
             ->whereDate('registration_deadline', '<', $now)
             ->chunkById(100, function ($events) use (&$expiredCount) {
@@ -38,7 +39,7 @@ class ExpireEventsCommand extends Command
 
                         // 🔁 re-check condition (WAJIB)
                         if (
-                            $locked->approval_status !== 'approved' ||
+                            $locked->approval_status !== ApprovalStatus::APPROVED ||
                             ! $locked->is_active ||
                             $locked->registration_deadline >= now()
                         ) {

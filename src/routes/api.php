@@ -68,6 +68,14 @@ Route::prefix('v1')->group(function () {
             Route::put('/', [ProfileController::class, 'update'])
                 ->middleware('throttle:30,1');
 
+            // CV
+            Route::post('cv', [ProfileController::class, 'storeCv'])
+                ->middleware('throttle:20,1');
+
+            Route::get('cv/download', [ProfileController::class, 'downloadCv']);
+
+            Route::delete('cv', [ProfileController::class, 'deleteCv']);
+
             /*
             |--------------------------------------------------------------------------
             | CAREER PROFILE

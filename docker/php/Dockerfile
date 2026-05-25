@@ -75,6 +75,7 @@ RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/opcache.ini \
 # COMPOSER
 # =========================================================
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+ARG COMPOSER_INSTALL_FLAGS="--no-dev"
 
 
 # =========================================================
@@ -90,16 +91,28 @@ COPY src/ .
 
 
 # =========================================================
+# RESET STALE BOOTSTRAP CACHE
+# =========================================================
+RUN find bootstrap/cache -type f -name '*.php' -delete
+
+
+# =========================================================
 # INSTALL DEPENDENCIES
 # =========================================================
 RUN composer install \
-    --no-dev \
+    ${COMPOSER_INSTALL_FLAGS} \
     --prefer-dist \
     --optimize-autoloader \
     --classmap-authoritative \
     --no-interaction \
     --no-progress \
     --no-scripts
+
+
+# =========================================================
+# REGENERATE PACKAGE MANIFEST
+# =========================================================
+RUN php artisan package:discover --ansi
 
 
 # =========================================================

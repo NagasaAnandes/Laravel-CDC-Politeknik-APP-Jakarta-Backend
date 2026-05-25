@@ -6,10 +6,12 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class User extends Authenticatable implements FilamentUser
 {
@@ -33,6 +35,7 @@ class User extends Authenticatable implements FilamentUser
         'linkedin_url',
         'graduation_year',
         'program_study',
+        'cv_path',
     ];
 
     /**
@@ -55,6 +58,7 @@ class User extends Authenticatable implements FilamentUser
             'password' => 'hashed',
             'role' => UserRole::class,
             'is_active' => 'boolean',
+            'graduation_year' => 'integer',
         ];
     }
 
@@ -94,15 +98,28 @@ class User extends Authenticatable implements FilamentUser
         return $this->role?->isAdmin() === true;
     }
 
+    public function isStudent(): bool
+    {
+        return $this->role?->isStudent() === true;
+    }
+
+    public function isAlumni(): bool
+    {
+        return $this->role?->isAlumni() === true;
+    }
+
     public function isStudentOrAlumni(): bool
     {
-        return in_array($this->role, [
-            UserRole::STUDENT,
-            UserRole::ALUMNI,
-        ]);
+        return $this->role?->isStudentOrAlumni() === true;
+    }
+
+    public function isCompany(): bool
+    {
+        return $this->role?->isCompany() === true;
     }
 
     public function company()
+    : BelongsTo
     {
         return $this->belongsTo(Company::class);
     }
@@ -122,6 +139,11 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasMany(Certificate::class);
     }
 
+    public function jobApplications(): HasMany
+    {
+        return $this->hasMany(JobApplication::class);
+    }
+
     /**
      * Check if user status is active.
      */
@@ -130,11 +152,24 @@ class User extends Authenticatable implements FilamentUser
         return $this->is_active === true;
     }
 
+    public function getCvUrlAttribute(): ?string
+    {
+        return $this->cv_path
+            ? asset('storage/' . ltrim($this->cv_path, '/'))
+            : null;
+    }
+
+    public function hasCv(): bool
+    {
+        return filled($this->cv_path);
+    }
+
     public function canAccessPanel(Panel $panel): bool
     {
         return match ($panel->getId()) {
             'admin' => $this->isActive() && $this->role?->isAdmin(),
-            'partner' => $this->isActive() && $this->role === UserRole::COMPANY,
+            'portal' => $this->isActive() && $this->isStudentOrAlumni(),
+            'partner' => $this->isActive() && $this->isCompany(),
             default => false,
         };
     }

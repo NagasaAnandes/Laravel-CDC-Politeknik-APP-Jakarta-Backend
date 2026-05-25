@@ -129,6 +129,11 @@ class JobVacancy extends Model
         return $this->hasMany(JobApplicationLog::class);
     }
 
+    public function jobApplications(): HasMany
+    {
+        return $this->hasMany(JobApplication::class);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Core Publish Logic (Single Source of Truth)
@@ -229,8 +234,7 @@ class JobVacancy extends Model
 
     public function applyCount(): int
     {
-        return $this->applicationLogs()
-            ->where('event_type', 'apply')
+        return $this->jobApplications()
             ->count();
     }
 

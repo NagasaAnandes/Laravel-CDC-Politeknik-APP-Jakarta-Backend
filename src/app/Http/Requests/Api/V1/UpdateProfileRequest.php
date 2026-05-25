@@ -33,7 +33,7 @@ class UpdateProfileRequest extends FormRequest
                 'sometimes',
                 'nullable',
                 'string',
-                'max:50',
+                'max:30',
             ],
 
             'linkedin_url' => [

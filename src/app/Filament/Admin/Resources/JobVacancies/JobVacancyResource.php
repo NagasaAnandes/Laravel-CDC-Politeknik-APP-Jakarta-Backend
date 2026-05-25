@@ -2,11 +2,13 @@
 
 namespace App\Filament\Admin\Resources\JobVacancies;
 
+use App\Enums\ApprovalStatus;
 use App\Filament\Admin\Resources\JobVacancies\Pages\CreateJobVacancy;
 use App\Filament\Admin\Resources\JobVacancies\Pages\EditJobVacancy;
 use App\Filament\Admin\Resources\JobVacancies\Pages\ListJobVacancies;
 use App\Filament\Admin\Resources\JobVacancies\Schemas\JobVacancyForm;
 use App\Filament\Admin\Resources\JobVacancies\Tables\JobVacanciesTable;
+use App\Filament\Shared\RelationManagers\JobApplicationsRelationManager;
 use App\Models\JobVacancy;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -42,7 +44,9 @@ class JobVacancyResource extends Resource
 
     public static function getRelations(): array
     {
-        return [];
+        return [
+            JobApplicationsRelationManager::class,
+        ];
     }
 
     /*
@@ -53,7 +57,7 @@ class JobVacancyResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        return (string) static::getModel()::where('approval_status', 'submitted')->count();
+        return (string) static::getModel()::where('approval_status', ApprovalStatus::SUBMITTED->value)->count();
     }
 
     public static function getNavigationBadgeColor(): ?string

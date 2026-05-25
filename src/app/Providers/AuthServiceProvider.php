@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Models\Certificate;
 use App\Models\Education;
+use App\Models\JobApplication;
+use App\Policies\JobApplicationPolicy;
 use App\Models\User;
 use App\Policies\UserPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
@@ -40,5 +42,6 @@ class AuthServiceProvider extends ServiceProvider
         Experience::class => ExperiencePolicy::class,
         Education::class => EducationPolicy::class,
         Certificate::class => CertificatePolicy::class,
+        JobApplication::class => JobApplicationPolicy::class,
     ];
 }

@@ -27,4 +27,14 @@ enum UserRole: string
     {
         return $this === self::STUDENT;
     }
+
+    public function isAlumni(): bool
+    {
+        return $this === self::ALUMNI;
+    }
+
+    public function isStudentOrAlumni(): bool
+    {
+        return $this->isStudent() || $this->isAlumni();
+    }
 }

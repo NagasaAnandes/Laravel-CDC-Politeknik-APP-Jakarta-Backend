@@ -7,6 +7,7 @@ use App\Filament\Partner\Resources\JobVacancies\Pages\EditJobVacancy;
 use App\Filament\Partner\Resources\JobVacancies\Pages\ListJobVacancies;
 use App\Filament\Partner\Resources\JobVacancies\Schemas\JobVacancyForm;
 use App\Filament\Partner\Resources\JobVacancies\Tables\JobVacanciesTable;
+use App\Filament\Shared\RelationManagers\JobApplicationsRelationManager;
 use App\Models\JobVacancy;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -37,7 +38,7 @@ class JobVacancyResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            JobApplicationsRelationManager::class,
         ];
     }
 

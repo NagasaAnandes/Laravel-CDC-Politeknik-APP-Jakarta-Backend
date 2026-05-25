@@ -12,6 +12,7 @@ class JobApplicationLog extends Model
         'job_vacancy_id',
         'user_id',
         'clicked_at',
+        'event_type',
         'user_agent',
         'ip_address',
     ];
