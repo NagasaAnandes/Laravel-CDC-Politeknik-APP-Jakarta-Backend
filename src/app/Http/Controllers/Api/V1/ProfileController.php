@@ -55,14 +55,14 @@ class ProfileController extends Controller
 
         $file = $request->file('file');
         $directory = 'cvs/user-' . $user->id;
-        $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
-        $path = Storage::disk('public')->putFileAs($directory, $file, $filename);
+        $filename = Str::uuid() . '.' . $file->extension();
+        $path = Storage::disk('private')->putFileAs($directory, $file, $filename);
 
         DB::transaction(function () use ($user, $path, $oldCvPath) {
             $user->forceFill(['cv_path' => $path])->save();
 
-            if ($oldCvPath && Storage::disk('public')->exists($oldCvPath)) {
-                Storage::disk('public')->delete($oldCvPath);
+            if ($oldCvPath && Storage::disk('private')->exists($oldCvPath)) {
+                Storage::disk('private')->delete($oldCvPath);
             }
         });
 
@@ -80,19 +80,19 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->hasCv() || !Storage::disk('public')->exists($user->cv_path)) {
+        if (!$user->hasCv() || !Storage::disk('private')->exists($user->cv_path)) {
             return ApiResponse::notFound('File not found');
         }
 
-        return response()->download(Storage::disk('public')->path($user->cv_path));
+        return response()->download(Storage::disk('private')->path($user->cv_path));
     }
 
     public function deleteCv(Request $request)
     {
         $user = $request->user();
 
-        if ($user->cv_path && Storage::disk('public')->exists($user->cv_path)) {
-            Storage::disk('public')->delete($user->cv_path);
+        if ($user->cv_path && Storage::disk('private')->exists($user->cv_path)) {
+            Storage::disk('private')->delete($user->cv_path);
         }
 
         $user->forceFill(['cv_path' => null])->save();

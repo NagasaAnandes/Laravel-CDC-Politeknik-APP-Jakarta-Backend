@@ -32,8 +32,16 @@ return [
 
         'local' => [
             'driver' => 'local',
+            'root' => storage_path('app'),
+            'throw' => false,
+            'report' => false,
+        ],
+
+        // Private disk used for sensitive user uploads (CVs)
+        'private' => [
+            'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            'visibility' => 'private',
             'throw' => false,
             'report' => false,
         ],

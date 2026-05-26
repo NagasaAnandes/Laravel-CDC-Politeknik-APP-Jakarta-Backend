@@ -65,7 +65,8 @@ class JobApplicationsRelationManager extends RelationManager
                     ->label('Internal Note')
                     ->limit(40)
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visible(fn (JobApplication $record): bool => \Illuminate\Support\Facades\Gate::allows('viewInternalNote', $record)),
 
                 TextColumn::make('note')
                     ->label('Applicant Note')
@@ -82,11 +83,11 @@ class JobApplicationsRelationManager extends RelationManager
                 Action::make('viewCv')
                     ->label('View CV')
                     ->icon('heroicon-o-document-arrow-down')
-                    ->url(fn (JobApplication $record): ?string => $record->user?->cv_path
-                        ? asset('storage/' . ltrim($record->user->cv_path, '/'))
+                    ->url(fn (JobApplication $record): ?string => filled($record->user?->cv_path)
+                        ? route('cv.download', ['application' => $record->id])
                         : null)
                     ->openUrlInNewTab()
-                    ->visible(fn (JobApplication $record): bool => filled($record->user?->cv_path)),
+                    ->visible(fn (JobApplication $record): bool => filled($record->user?->cv_path) && \Illuminate\Support\Facades\Gate::allows('view', $record)),
 
                 Action::make('timeline')
                     ->label('Timeline')

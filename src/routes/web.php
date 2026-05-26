@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AnnouncementController;
 use App\Http\Controllers\Api\V1\EventController;
 use App\Http\Controllers\Api\V1\JobController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\CvDownloadController;
 
 Route::get('/', function () {
     return response()->json([
@@ -32,4 +33,9 @@ Route::middleware('throttle:120,1')->group(function () {
     Route::get('/announcements', [AnnouncementController::class, 'index']);
     Route::get('/announcements/{announcement}', [AnnouncementController::class, 'show'])
         ->whereNumber('announcement');
+
+    // Secured CV download route used by Filament actions. Uses session auth.
+    Route::middleware('auth')->get('/cv/download/{application}', [CvDownloadController::class, 'download'])
+        ->whereNumber('application')
+        ->name('cv.download');
 });

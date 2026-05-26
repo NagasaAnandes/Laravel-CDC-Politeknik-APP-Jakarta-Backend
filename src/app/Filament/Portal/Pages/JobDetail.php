@@ -163,15 +163,15 @@ class JobDetail extends Page
     protected function storePrimaryCv(User $user): string
     {
         $directory = 'cvs/user-' . $user->id;
-        $extension = strtolower((string) ($this->cvFile->getClientOriginalExtension() ?: 'pdf'));
+        $extension = strtolower((string) ($this->cvFile->extension() ?: 'pdf'));
         $filename = 'primary-cv-' . now()->format('YmdHis') . '.' . $extension;
 
         $oldCvPath = $user->cv_path;
 
-        $path = Storage::disk('public')->putFileAs($directory, $this->cvFile, $filename);
+        $path = Storage::disk('private')->putFileAs($directory, $this->cvFile, $filename);
 
         if ($oldCvPath && $oldCvPath !== $path) {
-            Storage::disk('public')->delete($oldCvPath);
+            Storage::disk('private')->delete($oldCvPath);
         }
 
         return $path;

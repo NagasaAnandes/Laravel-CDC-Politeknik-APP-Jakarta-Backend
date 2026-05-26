@@ -51,4 +51,17 @@ class JobApplicationPolicy
         return $user->isCompany()
             && $application->jobVacancy?->company_id === $user->company_id;
     }
+
+    /**
+     * Determine whether the user can view internal recruiter notes for the application.
+     * By default only admins may view internal notes.
+     */
+    public function viewInternalNote(User $user, JobApplication $application): bool
+    {
+        if (! $user->isActive()) {
+            return false;
+        }
+
+        return $user->isAdmin();
+    }
 }

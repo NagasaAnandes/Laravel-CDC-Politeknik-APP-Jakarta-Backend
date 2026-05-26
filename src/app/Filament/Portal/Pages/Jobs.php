@@ -29,9 +29,56 @@ class Jobs extends Page implements HasTable
 
     public function getTableQuery(): Builder
     {
-        return JobVacancy::published()
-            ->with(['company:id,name'])
-            ->latest('published_at');
+        $userId = auth()->id();
+
+        $query = JobVacancy::published()
+            ->select([
+                'id',
+                'company_id',
+                'title',
+                'location',
+                'employment_type',
+                'description',
+                'published_at',
+            ])
+            ->with(['company:id,name,logo_path'])
+            ->withCount([
+                'jobApplications as current_user_application_count' => function ($q) use ($userId) {
+                    $q->where('user_id', $userId);
+                },
+            ])
+            ->orderByDesc('published_at')
+            ->orderByDesc('id');
+
+        // Lightweight search from query string (title, location, company)
+        if ($search = (string) request('search')) {
+            $s = substr(trim($search), 0, 100);
+            $query->where(function ($q) use ($s) {
+                $q->where('title', 'like', "%{$s}%")
+                    ->orWhere('location', 'like', "%{$s}%")
+                    ->orWhereHas('company', function ($cq) use ($s) {
+                        $cq->where('name', 'like', "%{$s}%");
+                    });
+            });
+        }
+
+        // Employment type filter
+        $allowedTypes = ['fulltime', 'parttime', 'intern', 'remote'];
+        if ($type = request('employment_type')) {
+            if (in_array($type, $allowedTypes, true)) {
+                $query->where('employment_type', $type);
+            }
+        }
+
+        // Location filter (partial)
+        if ($location = (string) request('location')) {
+            $loc = substr(trim($location), 0, 100);
+            if ($loc !== '') {
+                $query->where('location', 'like', "%{$loc}%");
+            }
+        }
+
+        return $query;
     }
 
     protected function getTableColumns(): array

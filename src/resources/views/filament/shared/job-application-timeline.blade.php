@@ -16,9 +16,11 @@
         <div class="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Reviewed at: <span class="font-medium text-gray-950 dark:text-white">{{ optional($application->reviewed_at)->format('d M Y H:i') ?? '—' }}</span>
         </div>
-        <div class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Internal note: <span class="font-medium text-gray-950 dark:text-white">{{ $application->internal_note ?: '—' }}</span>
-        </div>
+        @can('viewInternalNote', $application)
+            <div class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Internal note: <span class="font-medium text-gray-950 dark:text-white">{{ $application->internal_note ?: '—' }}</span>
+            </div>
+        @endcan
     </div>
 
     <div class="space-y-3">
