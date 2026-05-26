@@ -3,21 +3,37 @@
         $perPage = (int) request('per_page', 12);
         $jobs = $this->getTableQuery()->paginate($perPage)->withQueryString();
         $filtersActive = filled(request('search')) || filled(request('employment_type')) || filled(request('location'));
+        $searchValue = (string) request('search', '');
+        $employmentTypeValue = (string) request('employment_type', '');
+        $locationValue = (string) request('location', '');
+
+        $employmentTypeLabel = match ($employmentTypeValue) {
+            'fulltime' => 'Full-time',
+            'parttime' => 'Part-time',
+            'intern' => 'Intern',
+            'remote' => 'Remote',
+            default => null,
+        };
     @endphp
 
     <div class="space-y-6">
-        <section class="rounded-3xl border border-gray-200 bg-white/95 p-4 shadow-sm shadow-gray-950/5 backdrop-blur dark:border-gray-800 dark:bg-gray-950/80">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <form method="GET" class="w-full lg:max-w-4xl">
-                    <div class="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_auto]">
+        <x-filament::section
+            heading="Browse jobs"
+            description="Search published vacancies and keep the application flow inside the portal."
+            :compact="true"
+            class="shadow-sm"
+        >
+            <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+                <form method="GET" class="space-y-4">
+                    <div class="grid gap-4 md:grid-cols-[minmax(0,1.35fr)_minmax(0,0.95fr)_auto]">
                         <label class="block">
                             <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Search jobs</span>
                             <input
                                 name="search"
-                                value="{{ request('search') }}"
+                                value="{{ $searchValue }}"
                                 type="search"
                                 placeholder="Search jobs, skills, or companies"
-                                class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                                class="block w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
                             />
                         </label>
 
@@ -25,64 +41,91 @@
                             <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Employment type</span>
                             <select
                                 name="employment_type"
-                                class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                                class="block w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
                             >
                                 <option value="">All types</option>
-                                <option value="fulltime" {{ request('employment_type') === 'fulltime' ? 'selected' : '' }}>Full-time</option>
-                                <option value="parttime" {{ request('employment_type') === 'parttime' ? 'selected' : '' }}>Part-time</option>
-                                <option value="intern" {{ request('employment_type') === 'intern' ? 'selected' : '' }}>Intern</option>
-                                <option value="remote" {{ request('employment_type') === 'remote' ? 'selected' : '' }}>Remote</option>
+                                <option value="fulltime" @selected($employmentTypeValue === 'fulltime')>Full-time</option>
+                                <option value="parttime" @selected($employmentTypeValue === 'parttime')>Part-time</option>
+                                <option value="intern" @selected($employmentTypeValue === 'intern')>Intern</option>
+                                <option value="remote" @selected($employmentTypeValue === 'remote')>Remote</option>
                             </select>
                         </label>
 
                         <div class="flex items-end gap-2">
-                            <button
+                            <x-filament::button
                                 type="submit"
-                                class="inline-flex w-full items-center justify-center rounded-2xl bg-gray-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+                                color="primary"
+                                size="sm"
+                                class="w-full justify-center sm:w-auto"
                             >
                                 Search
-                            </button>
-                            <a
+                            </x-filament::button>
+
+                            <x-filament::button
+                                tag="a"
                                 href="{{ url('/portal/jobs') }}"
-                                class="inline-flex items-center justify-center rounded-2xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900"
+                                color="gray"
+                                outlined
+                                size="sm"
+                                class="w-full justify-center sm:w-auto"
                             >
                                 Reset
-                            </a>
+                            </x-filament::button>
                         </div>
                     </div>
+
+                    @if($filtersActive)
+                        <div class="flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-400">
+                            @if($searchValue !== '')
+                                <x-filament::badge color="warning">
+                                    Search: {{ $searchValue }}
+                                </x-filament::badge>
+                            @endif
+
+                            @if($employmentTypeLabel)
+                                <x-filament::badge color="gray">
+                                    Type: {{ $employmentTypeLabel }}
+                                </x-filament::badge>
+                            @endif
+
+                            @if($locationValue !== '')
+                                <x-filament::badge color="gray">
+                                    Location: {{ $locationValue }}
+                                </x-filament::badge>
+                            @endif
+                        </div>
+                    @endif
                 </form>
 
-                <div class="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-sm text-gray-600 ring-1 ring-inset ring-gray-200 dark:bg-gray-900/60 dark:text-gray-300 dark:ring-gray-800">
-                    <span class="font-medium text-gray-950 dark:text-white">{{ $jobs->total() }}</span>
-                    <span>jobs found</span>
-                </div>
+                <aside class="flex h-full flex-col justify-between gap-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 ring-1 ring-inset ring-gray-200 dark:border-gray-800 dark:bg-gray-900/60 dark:ring-gray-800">
+                    <div>
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Jobs found</p>
+                        <p class="mt-2 text-3xl font-semibold tracking-tight text-gray-950 dark:text-white">{{ $jobs->total() }}</p>
+                        <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
+                            Published vacancies that match the current filters.
+                        </p>
+                    </div>
+
+                    <div class="rounded-2xl bg-white px-4 py-3 ring-1 ring-inset ring-gray-200 dark:bg-gray-950 dark:ring-gray-800">
+                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Need a clean slate?</p>
+                        <p class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">Clear filters and return to the full job board.</p>
+                        <x-filament::button
+                            tag="a"
+                            href="{{ url('/portal/jobs') }}"
+                            color="gray"
+                            outlined
+                            size="sm"
+                            class="mt-3 w-full justify-center"
+                        >
+                            Reset filters
+                        </x-filament::button>
+                    </div>
+                </aside>
             </div>
-
-            @if($filtersActive)
-                <div class="mt-4 flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-400">
-                    @if(request('search'))
-                        <span class="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-800 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-500/20">
-                            Search: {{ request('search') }}
-                        </span>
-                    @endif
-
-                    @if(request('employment_type'))
-                        <span class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 font-medium text-gray-700 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700">
-                            Type: {{ ucfirst(request('employment_type')) }}
-                        </span>
-                    @endif
-
-                    @if(request('location'))
-                        <span class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 font-medium text-gray-700 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700">
-                            Location: {{ request('location') }}
-                        </span>
-                    @endif
-                </div>
-            @endif
-        </section>
+        </x-filament::section>
 
         @if($jobs->count())
-            <section aria-label="Available jobs" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <section aria-label="Available jobs" class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                 @foreach($jobs as $job)
                     @php
                         $company = $job->company;
@@ -95,18 +138,15 @@
                         $companyInitials = $companyInitials !== '' ? $companyInitials : 'IN';
                         $hasApplied = (int) ($job->current_user_application_count ?? 0) > 0;
                         $type = $job->employment_type;
-                        $typeClass = match($type) {
-                            'fulltime' => 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-500/10 dark:text-blue-200 dark:ring-blue-500/20',
-                            'parttime' => 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-500/20',
-                            'intern' => 'bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-200 dark:ring-indigo-500/20',
-                            'remote' => 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/20',
-                            default => 'bg-gray-100 text-gray-700 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700',
-                        };
+                        $isFeatured = $job->published_at?->diffInDays(now()) <= 3;
+                        $isInternship = $type === 'intern';
+                        $isRemote = $type === 'remote' || str_contains(strtolower((string) $job->location), 'remote');
+                        $deadlineUrgent = $job->expired_at && $job->expired_at->isFuture() && $job->expired_at->diffInDays(now(), false) <= 3;
                     @endphp
 
-                    <article class="group flex h-full flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white p-5 shadow-sm shadow-gray-950/5 transition duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-gray-800 dark:bg-gray-950/80 dark:shadow-black/10" data-job-card data-job-id="{{ $job->id }}">
+                    <article class="group flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm ring-1 ring-gray-950/5 transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-gray-950/10 dark:border-gray-800 dark:bg-gray-950/80 dark:ring-white/10 dark:hover:ring-white/20" data-job-card data-job-id="{{ $job->id }}">
                         <div class="flex items-start gap-4">
-                            <div class="relative h-12 w-12 shrink-0 overflow-hidden rounded-2xl bg-gray-100 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:ring-gray-700" aria-hidden="true">
+                            <div class="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-2xl bg-gray-100 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:ring-gray-700" aria-hidden="true">
                                 @if($company?->logo_url)
                                     <img
                                         src="{{ $company->logo_url }}"
@@ -118,7 +158,7 @@
                                 @endif
 
                                 <div
-                                    class="flex h-full w-full items-center justify-center text-sm font-semibold tracking-wide text-gray-500"
+                                    class="flex h-full w-full items-center justify-center text-xs font-semibold tracking-wide text-gray-500"
                                     data-company-avatar-fallback
                                     @if($company?->logo_url) hidden @endif
                                 >
@@ -128,53 +168,72 @@
 
                             <div class="min-w-0 flex-1">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset {{ $typeClass }}">
+                                    <x-filament::badge color="gray">
                                         {{ ucfirst($type ?: 'General') }}
-                                    </span>
+                                    </x-filament::badge>
+
+                                    @if($isFeatured)
+                                        <x-filament::badge color="warning">Featured</x-filament::badge>
+                                    @endif
+
+                                    @if($isInternship)
+                                        <x-filament::badge color="info">Internship</x-filament::badge>
+                                    @endif
+
+                                    @if($isRemote)
+                                        <x-filament::badge color="gray">Remote</x-filament::badge>
+                                    @endif
+
+                                    @if($deadlineUrgent)
+                                        <x-filament::badge color="danger">Deadline soon</x-filament::badge>
+                                    @endif
 
                                     @if($hasApplied)
-                                        <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/20">
+                                        <x-filament::badge color="success">
                                             Applied
-                                        </span>
+                                        </x-filament::badge>
                                     @endif
                                 </div>
 
-                                <h2 class="mt-3 text-lg font-semibold leading-snug text-gray-950 dark:text-white">
-                                    <a href="{{ url('/portal/jobs/show?job=' . $job->id) }}" class="line-clamp-2 transition hover:text-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
+                                <h2 class="mt-3 text-lg font-semibold leading-6 tracking-tight text-gray-950 dark:text-white">
+                                    <a href="{{ url('/portal/jobs/show?job=' . $job->id) }}" class="line-clamp-2 transition hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2">
                                         {{ $job->title }}
                                     </a>
                                 </h2>
 
-                                <p class="mt-2 line-clamp-1 text-sm font-medium text-gray-600 dark:text-gray-300">
+                                <p class="mt-1 line-clamp-1 text-sm font-medium text-gray-600 dark:text-gray-300">
                                     {{ $companyName }}
                                 </p>
-
-                                <div class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
-                                    @if($job->location)
-                                        <span class="inline-flex items-center gap-1.5">
-                                            <svg class="h-4 w-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.657 0 3-1.343 3-3S13.657 5 12 5 9 6.343 9 8s1.343 3 3 3z"></path>
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 22s8-4.5 8-10A8 8 0 004 12c0 5.5 8 10 8 10z"></path>
-                                            </svg>
-                                            <span class="line-clamp-1">{{ $job->location }}</span>
-                                        </span>
-                                    @endif
-
-                                    <span class="inline-flex items-center gap-1.5">
-                                        <svg class="h-4 w-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3"></path>
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2a10 10 0 100 20 10 10 0 000-20z"></path>
-                                        </svg>
-                                        <span>Posted {{ optional($job->published_at)->diffForHumans() }}</span>
-                                    </span>
-                                </div>
                             </div>
+                        </div>
 
-                            <div class="shrink-0 text-right text-xs text-gray-500 dark:text-gray-400">
-                                <div class="rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-600 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700">
-                                    {{ optional($job->published_at)->format('d M Y') }}
-                                </div>
-                            </div>
+                        <div class="mt-4 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+                            @if($job->location)
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-2.5 py-1 ring-1 ring-inset ring-gray-200 dark:bg-gray-900/60 dark:ring-gray-800">
+                                    <svg class="h-3.5 w-3.5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.657 0 3-1.343 3-3S13.657 5 12 5 9 6.343 9 8s1.343 3 3 3z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 22s8-4.5 8-10A8 8 0 004 12c0 5.5 8 10 8 10z"></path>
+                                    </svg>
+                                    <span class="line-clamp-1">{{ $job->location }}</span>
+                                </span>
+                            @endif
+
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-2.5 py-1 ring-1 ring-inset ring-gray-200 dark:bg-gray-900/60 dark:ring-gray-800">
+                                <svg class="h-3.5 w-3.5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2a10 10 0 100 20 10 10 0 000-20z"></path>
+                                </svg>
+                                <span>Posted {{ optional($job->published_at)->diffForHumans() ?? 'recently' }}</span>
+                            </span>
+
+                            @if($job->expired_at)
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-500/20">
+                                    <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <span>Deadline {{ optional($job->expired_at)->format('d M Y') }}</span>
+                                </span>
+                            @endif
                         </div>
 
                         <p class="mt-4 line-clamp-3 text-sm leading-6 text-gray-600 dark:text-gray-300">
@@ -183,33 +242,46 @@
 
                         <div class="mt-auto pt-5">
                             <div class="flex flex-col gap-3 border-t border-gray-100 pt-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
-                                <a
+                                <x-filament::button
+                                    tag="a"
                                     href="{{ url('/portal/jobs/show?job=' . $job->id) }}"
-                                    class="inline-flex items-center text-sm font-medium text-gray-700 transition hover:text-gray-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:text-gray-300 dark:hover:text-white"
+                                    color="gray"
+                                    outlined
+                                    size="sm"
+                                    class="w-full justify-center sm:w-auto"
                                 >
                                     View details
-                                </a>
+                                </x-filament::button>
 
                                 <div class="flex min-w-0 flex-col items-stretch gap-2 sm:items-end">
                                     @if($hasApplied)
-                                        <span class="inline-flex items-center justify-center rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/20">
-                                            Application already submitted
-                                        </span>
-                                    @else
-                                        <button
+                                        <x-filament::button
                                             type="button"
+                                            color="success"
+                                            outlined
+                                            size="sm"
+                                            disabled
+                                            class="w-full justify-center sm:w-auto"
+                                        >
+                                            Application already submitted
+                                        </x-filament::button>
+                                    @else
+                                        <x-filament::button
+                                            type="button"
+                                            color="primary"
+                                            size="sm"
+                                            class="w-full justify-center sm:w-auto"
                                             data-apply-button
                                             data-default-label="Apply now"
                                             data-loading-label="Opening application link..."
                                             data-job-id="{{ $job->id }}"
-                                            class="inline-flex items-center justify-center rounded-full bg-gray-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                                             aria-label="Apply to {{ $job->title }}"
                                         >
                                             Apply now
-                                        </button>
+                                        </x-filament::button>
                                     @endif
 
-                                    <p class="min-h-5 text-right text-xs text-gray-500" data-apply-feedback aria-live="polite"></p>
+                                    <p class="min-h-5 text-right text-xs text-gray-500 dark:text-gray-400" data-apply-feedback aria-live="polite"></p>
                                 </div>
                             </div>
                         </div>
@@ -229,21 +301,27 @@
             </div>
         @else
             <section class="rounded-3xl border border-dashed border-gray-300 bg-white p-10 text-center shadow-sm dark:border-gray-700 dark:bg-gray-950/60">
-                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-300" aria-hidden="true">
-                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700" aria-hidden="true">
+                    <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12h6m-6 4h6M9 8h6m-9 8h14M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"></path>
                     </svg>
                 </div>
 
-                <h2 class="mt-6 text-xl font-semibold text-gray-950 dark:text-white">No jobs found</h2>
+                <h2 class="mt-6 text-xl font-semibold tracking-tight text-gray-950 dark:text-white">No jobs found</h2>
                 <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400">
                     {{ $filtersActive ? 'Try a broader search or clear the active filters.' : 'New jobs will appear here when employers publish them.' }}
                 </p>
 
                 <div class="mt-6 flex items-center justify-center gap-3">
-                    <a href="{{ url('/portal/jobs') }}" class="inline-flex items-center justify-center rounded-2xl bg-gray-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200">
+                    <x-filament::button
+                        tag="a"
+                        href="{{ url('/portal/jobs') }}"
+                        color="gray"
+                        outlined
+                        size="sm"
+                    >
                         Reset search
-                    </a>
+                    </x-filament::button>
                 </div>
             </section>
         @endif

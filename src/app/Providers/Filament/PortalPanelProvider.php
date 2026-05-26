@@ -12,6 +12,7 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Widgets\AccountWidget;
+use App\Filament\Portal\Widgets\PortalExperienceWidget;
 use App\Filament\Portal\Widgets\AlumniTracerStatusWidget;
 use App\Filament\Portal\Widgets\PortalSummaryStatsWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -43,6 +44,7 @@ class PortalPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Portal/Widgets'), for: 'App\Filament\Portal\Widgets')
             ->widgets([
                 AccountWidget::class,
+                PortalExperienceWidget::class,
                 PortalSummaryStatsWidget::class,
                 AlumniTracerStatusWidget::class,
             ])

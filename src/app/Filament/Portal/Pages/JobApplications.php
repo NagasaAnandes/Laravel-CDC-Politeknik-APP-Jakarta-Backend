@@ -125,6 +125,36 @@ class JobApplications extends Page implements HasTable
         return [];
     }
 
+    protected function getTableEmptyStateHeading(): ?string
+    {
+        return 'No applications yet';
+    }
+
+    protected function getTableEmptyStateDescription(): ?string
+    {
+        return 'Start with a published job and your application history will appear here.';
+    }
+
+    protected function getTableEmptyStateIcon(): ?string
+    {
+        return 'heroicon-o-inbox';
+    }
+
+    protected function getTableEmptyStateActions(): array
+    {
+        return [
+            Action::make('browseJobs')
+                ->label('Browse Jobs')
+                ->icon('heroicon-o-briefcase')
+                ->url(url('/portal/jobs')),
+
+            Action::make('browseEvents')
+                ->label('Browse Events')
+                ->icon('heroicon-o-calendar-days')
+                ->url(url('/portal/events')),
+        ];
+    }
+
     protected function getTableDefaultSortColumn(): ?string
     {
         return 'applied_at';

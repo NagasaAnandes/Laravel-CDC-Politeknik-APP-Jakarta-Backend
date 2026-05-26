@@ -98,6 +98,36 @@ class Events extends Page implements HasTable
         return [];
     }
 
+    protected function getTableEmptyStateHeading(): ?string
+    {
+        return 'No events found';
+    }
+
+    protected function getTableEmptyStateDescription(): ?string
+    {
+        return 'Try a broader filter or come back later when new campus and career events are published.';
+    }
+
+    protected function getTableEmptyStateIcon(): ?string
+    {
+        return 'heroicon-o-calendar-days';
+    }
+
+    protected function getTableEmptyStateActions(): array
+    {
+        return [
+            Action::make('browseJobs')
+                ->label('Browse Jobs')
+                ->icon('heroicon-o-briefcase')
+                ->url(url('/portal/jobs')),
+
+            Action::make('resetFilters')
+                ->label('Reset Filters')
+                ->icon('heroicon-o-arrow-path')
+                ->url(url('/portal/events')),
+        ];
+    }
+
     protected function getTableDefaultSortColumn(): ?string
     {
         return 'published_at';

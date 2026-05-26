@@ -40,6 +40,7 @@ class Jobs extends Page implements HasTable
                 'employment_type',
                 'description',
                 'published_at',
+                'expired_at',
             ])
             ->with(['company:id,name,logo_path'])
             ->withCount([
